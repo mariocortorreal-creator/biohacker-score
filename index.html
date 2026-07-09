@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Biohacker Score</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<style>
+  body { background:#0A0E14; font-family:'Inter', system-ui, sans-serif; }
+  .font-display { font-family:'Space Grotesk', sans-serif; }
+  .font-mono { font-family:'JetBrains Mono', monospace; }
+  input[type="range"] { -webkit-appearance:none; height:4px; background:#1E2535; border-radius:999px; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; border-radius:50%; background:currentColor; cursor:pointer; box-shadow:0 0 8px currentColor; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .animate-spin { animation: spin 1s linear infinite; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="boot-error" style="display:none; position:fixed; inset:0; background:#0A0E14; color:#FF6B5E; font-family:monospace; font-size:13px; padding:24px; white-space:pre-wrap; z-index:9999; overflow:auto;"></div>
+<script>
+  window.addEventListener('error', function (e) {
+    var el = document.getElementById('boot-error');
+    if (el) {
+      el.style.display = 'block';
+      el.textContent = 'Error cargando la app:\n\n' + (e.message || e) + '\n' + (e.filename ? (e.filename + ':' + e.lineno) : '');
+    }
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var el = document.getElementById('boot-error');
+    if (el) {
+      el.style.display = 'block';
+      el.textContent = 'Error de promesa:\n\n' + (e.reason && e.reason.message ? e.reason.message : e.reason);
+    }
+  });
+</script>
+<!-- Bundled from src/native-bridge.js via `npm run sync` — exposes window.CapacitorHealth.
+     Only present/relevant inside the Capacitor native shell; harmless if missing in a plain browser. -->
+<script src="native-bridge.js"></script>
+<script>
+"use strict";
+const { useState, useEffect, useMemo } = React;
+// ---------- Config ----------
+const SUPABASE_URL = "https://bciwxtjgabbnuxjxrwzt.supabase.co";
+const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJjaXd4dGpnYWJibnV4anhyd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyNDMwMjksImV4cCI6MjA5NzgxOTAyOX0.f6zauUfM8seFtpvV4aAhEr54glLxtpu7Agfs4MjPpwQ";
+const AUTH = `${SUPABASE_URL}/auth/v1`;
+const REST = `${SUPABASE_URL}/rest/v1`;
+const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/test_9B64gA80c7zQdYddJS6oo00";
+const SESSION_KEY = "biohacker_score_session";
+// window.Capacitor is injected automatically by the native app shell (Android/iOS) at page load;
+// it's simply undefined in a plain browser, which is exactly the signal used to hide native-only UI.
+const isNativeApp = typeof window !== "undefined" && !!window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform();
+// capacitor-health's actual API only exposes steps / workouts / active-calories / distance / mindfulness —
+// no sleep and no body weight, despite those being common HealthKit/Health Connect data types.
+// Pre-fill is scoped to what's real: exercise minutes from today's workouts.
+const HEALTH_PERMISSIONS = ["READ_STEPS", "READ_WORKOUTS", "READ_ACTIVE_CALORIES"];
+// ---------- Icons (inline, no external icon lib) ----------
+function Icon({ children, size = 18, className = "", style = {} }) {
+    return (React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", className: className, style: style }, children));
+}
+const Moon = (p) => React.createElement(Icon, { ...p },
+    React.createElement("path", { d: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" }));
+const Flame = (p) => React.createElement(Icon, { ...p },
+    React.createElement("path", { d: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" }));
+const Activity = (p) => React.createElement(Icon, { ...p },
+    React.createElement("polyline", { points: "22 12 18 12 15 21 9 3 6 12 2 12" }));
+const Brain = (p) => React.createElement(Icon, { ...p },
+    React.createElement("path", { d: "M9.5 2A2.5 2.5 0 0 0 7 4.5v.55A3.5 3.5 0 0 0 4 8.5 3.5 3.5 0 0 0 5.06 11 3.5 3.5 0 0 0 4 13.5 3.5 3.5 0 0 0 7 17v.5A2.5 2.5 0 0 0 9.5 20h0A2.5 2.5 0 0 0 12 17.5v-13A2.5 2.5 0 0 0 9.5 2z" }),
+    React.createElement("path", { d: "M14.5 2A2.5 2.5 0 0 1 17 4.5v.55A3.5 3.5 0 0 1 20 8.5 3.5 3.5 0 0 1 18.94 11 3.5 3.5 0 0 1 20 13.5 3.5 3.5 0 0 1 17 17v.5a2.5 2.5 0 0 1-2.5 2.5h0A2.5 2.5 0 0 1 12 17.5v-13A2.5 2.5 0 0 1 14.5 2z" }));
+const LogOut = (p) => React.createElement(Icon, { ...p },
+    React.createElement("path", { d: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" }),
+    React.createElement("polyline", { points: "16 17 21 12 16 7" }),
+    React.createElement("line", { x1: "21", y1: "12", x2: "9", y2: "12" }));
+const Loader2 = (p) => React.createElement(Icon, { ...p },
+    React.createElement("path", { d: "M21 12a9 9 0 1 1-6.219-8.56" }));
+const ChevronRight = (p) => React.createElement(Icon, { ...p },
+    React.createElement("polyline", { points: "9 18 15 12 9 6" }));
+const Check = (p) => React.createElement(Icon, { ...p },
+    React.createElement("polyline", { points: "20 6 9 17 4 12" }));
+const AlertCircle = (p) => React.createElement(Icon, { ...p },
+    React.createElement("circle", { cx: "12", cy: "12", r: "10" }),
+    React.createElement("line", { x1: "12", y1: "8", x2: "12", y2: "12" }),
+    React.createElement("line", { x1: "12", y1: "16", x2: "12.01", y2: "16" }));
+// ---------- Scoring engine ----------
+function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
+const DEFAULT_GOALS = { sleepHours: 8, fastingHours: 16, exerciseMinutes: 45, stressMax: 3 };
+// ---------- Body composition image set ----------
+const BODY_IMAGES = {
+    male: [
+        { stage: 1, label: "Definido", img: "https://res.cloudinary.com/db9jsvtr3/image/upload/v1782859013/biohacker-score/biohacker-score/male-1-lean.jpg" },
+        { stage: 2, label: "Atlético", img: "https://res.cloudinary.com/db9jsvtr3/image/upload/v1782859018/biohacker-score/male-2-fit.jpg" },
+        { stage: 3, label: "Promedio", img: "https://res.cloudinary.com/db9jsvtr3/image/upload/v1782859022/biohacker-score/male-3-average.jpg" },
+        { stage: 4, label: "Sobre el promedio", img: "https://res.cloudinary.com/db9jsvtr3/image/upload/v1782859027/biohacker-score/male-4-higher.jpg" },
+    ],
+    female: [
+        { stage: 1, label: "Definida", img: "https://res.cloudinary.com/db9jsvtr3/image/upload/v1782859031/biohacker-score/female-1-lean.jpg" },
+        { stage: 2, label: "Atlética", img: "https://res.cloudinary.com/db9jsvtr3/image/upload/v1782859034/biohacker-score/female-2-fit.jpg" },
+        { stage: 3, label: "Promedio", img: "https://res.cloudinary.com/db9jsvtr3/image/upload/v1782859040/biohacker-score/female-3-average.jpg" },
+        { stage: 4, label: "Sobre el promedio", img: "https://res.cloudinary.com/db9jsvtr3/image/upload/v1782859044/biohacker-score/female-4-higher.jpg" },
+    ],
+};
+function sleepScore(hours, quality, goalHours) {
+    if (hours == null || quality == null)
+        return null;
+    const goal = goalHours || DEFAULT_GOALS.sleepHours;
+    const diff = Math.abs(hours - goal);
+    const hoursScore = diff <= 0.5 ? 100 : clamp(100 - ((diff - 0.5) / 2.5) * 100, 0, 100);
+    const qualityScore = quality * 10;
+    return clamp(hoursScore * 0.5 + qualityScore * 0.5, 0, 100);
+}
+function nutritionScore(fastingHours, nutritionQuality, goalFasting) {
+    if (fastingHours == null || nutritionQuality == null)
+        return null;
+    const goal = goalFasting || DEFAULT_GOALS.fastingHours;
+    const diff = Math.abs(fastingHours - goal);
+    const fastingScoreVal = diff <= 2 ? 100 : clamp(100 - ((diff - 2) / 4) * 100, 0, 100);
+    const qualityScore = nutritionQuality * 10;
+    return clamp(fastingScoreVal * 0.4 + qualityScore * 0.6, 0, 100);
+}
+function exerciseScore(minutes, intensity, goalMinutes) {
+    if (minutes == null || intensity == null)
+        return null;
+    const goal = goalMinutes || DEFAULT_GOALS.exerciseMinutes;
+    const minutesScore = clamp((minutes / goal) * 100, 0, 100);
+    const intensityScore = intensity * 10;
+    return clamp(minutesScore * 0.6 + intensityScore * 0.4, 0, 100);
+}
+function stressScore(stressLevel, goalMax) {
+    if (stressLevel == null)
+        return null;
+    const goal = clamp(goalMax || DEFAULT_GOALS.stressMax, 1, 9);
+    if (stressLevel <= goal)
+        return 100;
+    return clamp(100 - ((stressLevel - goal) / (10 - goal)) * 100, 0, 100);
+}
+function totalScore(s) {
+    const vals = [s.sleep, s.nutrition, s.exercise, s.stress].filter((v) => v != null);
+    if (vals.length === 0)
+        return null;
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+function scoreColor(v) {
+    if (v == null)
+        return "#3A4250";
+    if (v >= 80)
+        return "#3DDCFF";
+    if (v >= 60)
+        return "#7FE3A3";
+    if (v >= 40)
+        return "#FFC857";
+    return "#FF6B5E";
+}
+// ---------- Streaks & weekly comparison ----------
+function computeStreak(entries) {
+    if (!entries || entries.length === 0)
+        return 0;
+    const dates = new Set(entries.map((e) => e.entry_date));
+    let streak = 0;
+    let cursor = new Date();
+    // if today has no entry yet, start counting from yesterday (still allows an active streak)
+    const todayStr = cursor.toISOString().slice(0, 10);
+    if (!dates.has(todayStr))
+        cursor.setDate(cursor.getDate() - 1);
+    while (true) {
+        const ds = cursor.toISOString().slice(0, 10);
+        if (dates.has(ds)) {
+            streak++;
+            cursor.setDate(cursor.getDate() - 1);
+        }
+        else
+            break;
+    }
+    return streak;
+}
+function weeklyComparison(entries, goals) {
+    if (!entries || entries.length === 0)
+        return null;
+    const scored = entries.map((e) => ({
+        date: e.entry_date,
+        total: totalScore({
+            sleep: sleepScore(e.sleep_hours, e.sleep_quality, goals.sleepHours),
+            nutrition: nutritionScore(e.fasting_hours, e.nutrition_quality, goals.fastingHours),
+            exercise: exerciseScore(e.exercise_minutes, e.exercise_intensity, goals.exerciseMinutes),
+            stress: stressScore(e.stress_level, goals.stressMax),
+        }),
+    })).filter((e) => e.total != null);
+    if (scored.length === 0)
+        return null;
+    const sorted = [...scored].sort((a, b) => (a.date < b.date ? 1 : -1)); // newest first
+    const thisWeek = sorted.slice(0, 7);
+    const lastWeek = sorted.slice(7, 14);
+    if (thisWeek.length === 0)
+        return null;
+    const avg = (arr) => arr.reduce((a, b) => a + b.total, 0) / arr.length;
+    const thisAvg = avg(thisWeek);
+    if (lastWeek.length === 0)
+        return { thisAvg, lastAvg: null, deltaPct: null };
+    const lastAvg = avg(lastWeek);
+    const deltaPct = lastAvg === 0 ? null : ((thisAvg - lastAvg) / lastAvg) * 100;
+    return { thisAvg, lastAvg, deltaPct };
+}
+// ---------- Recommendation engine ----------
+function tier(v) {
+    if (v == null)
+        return null;
+    if (v >= 75)
+        return "high";
+    if (v >= 45)
+        return "mid";
+    return "low";
+}
+const RECS = {
+    sleep: {
+        low: { title: "Sueño: tu cuello de botella", tip: "Con menos de 6h o mala calidad, tu cuerpo no completa los ciclos de reparación que necesita. Fija una hora de apagar pantallas 60 min antes de dormir y mantén tu cuarto a oscuras y fresco (18-20°C). Es el cambio de mayor impacto que puedes hacer esta semana." },
+        mid: { title: "Sueño: vas bien, falta consistencia", tip: "Tu sueño es aceptable pero variable. El cuerpo optimiza recuperación cuando te acuestas y levantas a la misma hora, incluso fines de semana. Prueba fijar tu hora de despertar 7 días seguidos antes de tocar la duración." },
+        high: { title: "Sueño: en zona óptima", tip: "Estás en el rango que más se asocia con buena recuperación cognitiva y hormonal. Mantén la rutina — es tu mayor ventaja competitiva ahora mismo." },
+    },
+    nutrition: {
+        low: { title: "Ayuno/Nutrición: el mayor margen de mejora", tip: "Ventanas de ayuno muy cortas o muy largas, combinadas con baja calidad nutricional, frenan la sensibilidad a la insulina. Empieza simple: 12h de ayuno nocturno esta semana, sin contar calorías todavía. Ajusta la ventana después." },
+        mid: { title: "Ayuno/Nutrición: base sólida", tip: "Ya tienes el hábito de ayuno. El siguiente nivel es calidad: prioriza proteína completa en tu primera comida del día para frenar el hambre y estabilizar energía hasta la tarde." },
+        high: { title: "Ayuno/Nutrición: en zona óptima", tip: "Tu ventana de ayuno y calidad nutricional están alineadas con lo que más se asocia a buena composición corporal y energía estable. Sostén el patrón." },
+    },
+    exercise: {
+        low: { title: "Ejercicio: el más fácil de subir rápido", tip: "Menos de 20-30 min de movimiento intencional al día es el factor que más rápido puedes corregir. No necesitas el gimnasio perfecto: 20 minutos de caminata a paso firme ya mueve la aguja en sensibilidad a la insulina y estado de ánimo." },
+        mid: { title: "Ejercicio: consistente, falta intensidad", tip: "Ya te mueves regularmente. Para seguir progresando, agrega 1-2 sesiones de fuerza por semana — es lo que más protege masa muscular y metabolismo a largo plazo, sobre todo después de los 35." },
+        high: { title: "Ejercicio: en zona óptima", tip: "Volumen e intensidad están en un rango asociado a buena salud cardiometabólica. Vigila la recuperación para no caer en sobreentrenamiento." },
+    },
+    stress: {
+        low: { title: "Estrés: prioridad number one esta semana", tip: "Estrés crónico alto eleva cortisol de forma sostenida, lo que sabotea sueño, digestión y composición corporal — aunque el resto de tus hábitos sean perfectos. Antes de optimizar cualquier otra cosa, mete 5-10 min de respiración o pausa real sin pantalla, dos veces al día." },
+        mid: { title: "Estrés: manejable, con margen", tip: "Tu nivel de estrés es funcional pero no ideal. Identifica tu mayor disparador del día y dale un límite de tiempo explícito — el estrés sin estructura es el que más desgasta." },
+        high: { title: "Estrés: en zona óptima", tip: "Tu nivel de estrés percibido es bajo, lo cual potencia todo lo demás: mejor sueño, mejor digestión, mejor recuperación del ejercicio. Sostén las prácticas que te están funcionando." },
+    },
+};
+const CATEGORY_LABELS = { sleep: "Sueño", nutrition: "Ayuno / Nutrición", exercise: "Ejercicio", stress: "Estrés" };
+function buildRecommendations(scores) {
+    const entries = Object.entries(scores)
+        .filter(([, v]) => v != null)
+        .map(([key, v]) => ({ key, value: v, t: tier(v) }))
+        .sort((a, b) => a.value - b.value);
+    return entries.map((e) => ({ key: e.key, label: CATEGORY_LABELS[e.key], value: e.value, ...RECS[e.key][e.t] }));
+}
+// ---------- Body composition -> nutrition direction ----------
+function goalDirectionFromBody(current, target) {
+    if (!current || !target)
+        return null;
+    if (target < current)
+        return "cut";
+    if (target > current)
+        return "bulk";
+    return "maintain";
+}
+const GOAL_DIRECTION_LABELS = { cut: "Pérdida de grasa", bulk: "Ganancia muscular", maintain: "Mantenimiento" };
+function suggestedGoals(goalDirection) {
+    const fastingHours = goalDirection === "cut" ? 18 : goalDirection === "bulk" ? 14 : DEFAULT_GOALS.fastingHours;
+    return { sleepHours: DEFAULT_GOALS.sleepHours, fastingHours, exerciseMinutes: DEFAULT_GOALS.exerciseMinutes, stressMax: DEFAULT_GOALS.stressMax };
+}
+const MAINTENANCE_KCAL_PER_KG = 30;
+const FAT_G_PER_KG = 0.8;
+function computeMacros(weightKg, macroRow) {
+    if (!weightKg || weightKg <= 0 || !macroRow)
+        return null;
+    const proteinPerKg = ((macroRow.protein_g_per_kg_min || 0) + (macroRow.protein_g_per_kg_max || 0)) / 2;
+    if (!proteinPerKg)
+        return null;
+    const calorieAdjustment = ((macroRow.calorie_adjustment_min || 0) + (macroRow.calorie_adjustment_max || 0)) / 2;
+    const maintenanceKcal = weightKg * MAINTENANCE_KCAL_PER_KG;
+    const targetKcal = maintenanceKcal + calorieAdjustment;
+    const proteinG = weightKg * proteinPerKg;
+    const fatG = weightKg * FAT_G_PER_KG;
+    const remainingKcal = Math.max(0, targetKcal - proteinG * 4 - fatG * 9);
+    const carbsG = remainingKcal / 4;
+    return { maintenanceKcal, targetKcal, proteinG, fatG, carbsG };
+}
+const CATEGORY_TO_SUPPLEMENT_GOAL = { sleep: "sleep", nutrition: "fasting_metabolism", exercise: "exercise_recovery", stress: "stress" };
+function adaptiveNoteApplies(goalDirection, today) {
+    if (goalDirection === "cut")
+        return today.stressLevel != null && today.stressLevel >= 8;
+    if (goalDirection === "bulk")
+        return today.exerciseMinutes == null || today.exerciseMinutes < 20;
+    if (goalDirection === "maintain")
+        return today.sleepHours != null && today.goalSleepHours != null && today.sleepHours < today.goalSleepHours;
+    return false;
+}
+function trialDaysLeft(trialEndsAt) {
+    if (!trialEndsAt)
+        return null;
+    const diff = new Date(trialEndsAt).getTime() - Date.now();
+    return diff > 0 ? Math.ceil(diff / 86400000) : 0;
+}
+const PREMIUM_SOURCE_LABELS = { paid: "Plan Premium", comp_trainer: "Acceso de cortesía (entrenador)", trial: "Prueba gratuita" };
+// ---------- 7-day protocols (premium, editable here) ----------
+const PROTOCOLS = {
+    sleep: {
+        name: "Protocolo de Reset de Sueño — 7 días",
+        days: [
+            "Fija tu hora de despertar (la misma todos los días, sin excepción, incluyendo fin de semana).",
+            "Apaga pantallas 60 min antes de dormir. Si necesitas hacer algo, que sea en papel o audio.",
+            "Cuarto a oscuras total y entre 18-20°C. Si entra luz, usa antifaz esta noche.",
+            "Corta cafeína después de las 2 PM (la vida media es más larga de lo que crees).",
+            "10 min de luz solar directa apenas despiertas — regula tu ritmo circadiano más que cualquier suplemento.",
+            "Cena al menos 3h antes de acostarte. Digestión activa = sueño profundo interrumpido.",
+            "Evalúa: ¿cuántas noches de las 6 anteriores cumpliste? Ajusta la meta de horas si fue muy ambiciosa.",
+        ],
+    },
+    nutrition: {
+        name: "Protocolo de Ayuno Progresivo — 7 días",
+        days: [
+            "Define tu ventana de alimentación actual real (sin juzgar) — solo obsérvala hoy.",
+            "Retrasa tu primera comida 30 min respecto a ayer.",
+            "Primera comida del día: prioriza proteína completa (huevo, carne, pescado) antes que carbohidrato.",
+            "Retrasa tu primera comida 30 min más (acumulado: 1h respecto al día 1).",
+            "Día de mantenimiento — repite el patrón del día anterior, sin agregar más restricción.",
+            "Retrasa 30 min más si te sentiste bien los últimos 2 días. Si no, mantente donde estás.",
+            "Evalúa tu ventana de ayuno actual vs tu meta. Ajusta la meta a algo sostenible, no aspiracional.",
+        ],
+    },
+    exercise: {
+        name: "Protocolo de Activación Mínima Viable — 7 días",
+        days: [
+            "Camina 20 min a paso firme. Sin excusas de 'no tengo tiempo' — cuenta como entrenamiento hoy.",
+            "10 min de movilidad articular al despertar (cuello, hombros, cadera, tobillos).",
+            "Sesión de fuerza corta: 3 ejercicios básicos (sentadilla, empuje, tracción), 3 series cada uno.",
+            "Camina 20 min — puede ser fraccionado en 2x10 si el día está apretado.",
+            "Sesión de fuerza corta #2 — mismos ejercicios, intenta una repetición más por serie.",
+            "Actividad libre: lo que se te antoje (bici, baile, deporte). El objetivo es que disfrutes moverte.",
+            "Descanso activo: caminata suave + estiramiento. Evalúa cómo se siente tu cuerpo vs hace 7 días.",
+        ],
+    },
+    stress: {
+        name: "Protocolo de Regulación de Estrés — 7 días",
+        days: [
+            "Identifica tu mayor disparador de estrés de ayer. Escríbelo en una frase.",
+            "5 min de respiración 4-7-8 (inhala 4s, sostén 7s, exhala 8s) al despertar.",
+            "Bloquea 15 min sin pantallas a mitad del día — solo silencio o caminar.",
+            "Repite la respiración 4-7-8, ahora antes de dormir en vez de al despertar.",
+            "Pon un límite de tiempo explícito a tu mayor disparador (ej: 'reviso correo solo 2 veces al día').",
+            "10 min de algo que te genere placer sin culpa — sin productividad de por medio.",
+            "Evalúa: ¿bajó tu nivel de estrés percibido esta semana? Ajusta qué práctica repites la próxima.",
+        ],
+    },
+};
+// ---------- Score ring ----------
+// ---------- Simple line chart (pure SVG, no external chart library) ----------
+function SimpleLineChart({ data }) {
+    const width = 600, height = 220, padL = 32, padR = 12, padT = 10, padB = 24;
+    const innerW = width - padL - padR, innerH = height - padT - padB;
+    const valid = data.filter((d) => d.total != null);
+    if (valid.length === 0)
+        return null;
+    const xFor = (i) => padL + (data.length === 1 ? innerW / 2 : (i / (data.length - 1)) * innerW);
+    const yFor = (v) => padT + innerH - (clamp(v, 0, 100) / 100) * innerH;
+    const points = data.map((d, i) => (d.total == null ? null : { x: xFor(i), y: yFor(d.total) })).filter(Boolean);
+    const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+    const gridLines = [0, 25, 50, 75, 100];
+    const labelStep = Math.max(1, Math.ceil(data.length / 6));
+    return (React.createElement("svg", { viewBox: `0 0 ${width} ${height}`, className: "w-full h-full" },
+        gridLines.map((g) => (React.createElement("line", { key: g, x1: padL, x2: width - padR, y1: yFor(g), y2: yFor(g), stroke: "#1E2535", strokeWidth: "1" }))),
+        gridLines.map((g) => (React.createElement("text", { key: g, x: padL - 6, y: yFor(g) + 3, textAnchor: "end", fontSize: "9", fill: "#3A4250" }, g))),
+        data.map((d, i) => (i % labelStep === 0 ? (React.createElement("text", { key: i, x: xFor(i), y: height - 6, textAnchor: "middle", fontSize: "9", fill: "#3A4250" }, d.date)) : null)),
+        linePath && React.createElement("path", { d: linePath, fill: "none", stroke: "#3DDCFF", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }),
+        points.map((p, i) => React.createElement("circle", { key: i, cx: p.x, cy: p.y, r: "3", fill: "#3DDCFF" }))));
+}
+function ScoreRing({ categories, total }) {
+    const size = 220, stroke = 14, r = (size - stroke) / 2;
+    const circumference = 2 * Math.PI * r;
+    const segLen = circumference / 4, gap = 6;
+    let offsetAccum = 0;
+    return (React.createElement("div", { className: "relative", style: { width: size, height: size } },
+        React.createElement("svg", { width: size, height: size, className: "-rotate-90" },
+            React.createElement("circle", { cx: size / 2, cy: size / 2, r: r, fill: "none", stroke: "#1A2030", strokeWidth: stroke }),
+            categories.map((c) => {
+                var _a;
+                const value = (_a = c.value) !== null && _a !== void 0 ? _a : 0;
+                const len = (value / 100) * (segLen - gap);
+                const dasharray = `${len} ${circumference - len}`;
+                const dashoffset = -(offsetAccum);
+                offsetAccum += segLen;
+                return (React.createElement("circle", { key: c.key, cx: size / 2, cy: size / 2, r: r, fill: "none", stroke: c.value == null ? "#232A38" : c.color, strokeWidth: stroke, strokeLinecap: "round", strokeDasharray: dasharray, strokeDashoffset: dashoffset, style: { transition: "stroke-dasharray 1s ease-out", filter: c.value ? `drop-shadow(0 0 4px ${c.color}aa)` : "none" } }));
+            })),
+        React.createElement("div", { className: "absolute inset-0 flex flex-col items-center justify-center" },
+            React.createElement("span", { className: "font-mono text-5xl font-semibold tracking-tight", style: { color: scoreColor(total) } }, total != null ? Math.round(total) : "--"),
+            React.createElement("span", { className: "text-[11px] uppercase tracking-[0.2em] text-slate-500 mt-1" }, "Score de hoy"))));
+}
+function FieldSlider({ icon: IconCmp, label, unit, value, onChange, min, max, step, color }) {
+    return (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
+        React.createElement("div", { className: "flex items-center justify-between mb-3" },
+            React.createElement("div", { className: "flex items-center gap-2" },
+                React.createElement(IconCmp, { size: 16, style: { color } }),
+                React.createElement("span", { className: "text-sm text-slate-300" }, label)),
+            React.createElement("span", { className: "font-mono text-sm text-slate-100" }, value !== null && value !== void 0 ? value : "--",
+                " ",
+                React.createElement("span", { className: "text-slate-500" }, unit))),
+        React.createElement("input", { type: "range", min: min, max: max, step: step, value: value !== null && value !== void 0 ? value : min, onChange: (e) => onChange(parseFloat(e.target.value)), className: "w-full", style: { accentColor: color, color } })));
+}
+function SuggestedGoalChip({ value, unit, onApply }) {
+    return (React.createElement("button", { type: "button", onClick: onApply, className: "font-mono text-[10px] text-[#3DDCFF] bg-[#3DDCFF]/10 border border-[#3DDCFF]/30 rounded-full px-2 py-0.5 hover:bg-[#3DDCFF]/20 transition shrink-0" },
+        "Sugerido: ",
+        value,
+        unit));
+}
+function MacroCalculatorCard({ weightDraft, onWeightChange, onSave, saving, macros, goalLabel }) {
+    const weightInputRow = React.createElement("div", { className: "flex items-end gap-2 mb-4" },
+        React.createElement("label", { className: "flex-1" },
+            React.createElement("div", { className: "text-xs text-slate-400 mb-1" }, "Peso corporal (kg)"),
+            React.createElement("input", { type: "number", step: "0.5", min: "0", value: weightDraft !== null && weightDraft !== void 0 ? weightDraft : "", onChange: (e) => onWeightChange(e.target.value === "" ? null : parseFloat(e.target.value)), className: "w-full bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
+        React.createElement("button", { type: "button", onClick: onSave, disabled: saving || !weightDraft, className: "shrink-0 flex items-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-4 py-2 hover:brightness-110 transition disabled:opacity-40" },
+            saving ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : React.createElement(Check, { size: 14 }),
+            "Guardar"));
+    const results = macros && React.createElement(React.Fragment, null,
+        React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-4 gap-3" },
+            React.createElement("div", { className: "text-center" },
+                React.createElement("div", { className: "font-mono text-lg text-slate-100" }, Math.round(macros.targetKcal)),
+                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Kcal / día")),
+            React.createElement("div", { className: "text-center" },
+                React.createElement("div", { className: "font-mono text-lg", style: { color: "#7FE3A3" } }, Math.round(macros.proteinG), "g"),
+                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Proteína")),
+            React.createElement("div", { className: "text-center" },
+                React.createElement("div", { className: "font-mono text-lg", style: { color: "#FFC857" } }, Math.round(macros.fatG), "g"),
+                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Grasa")),
+            React.createElement("div", { className: "text-center" },
+                React.createElement("div", { className: "font-mono text-lg", style: { color: "#3DDCFF" } }, Math.round(macros.carbsG), "g"),
+                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Carbohidratos"))),
+        React.createElement("div", { className: "text-[11px] text-slate-500 mt-3" }, `Objetivo: ${goalLabel}. Estimación inicial — ajusta según cómo se mueva tu peso en 2 semanas.`));
+    const emptyState = !macros && React.createElement("div", { className: "text-xs text-slate-500" }, "Ingresa tu peso para calcular tus macros según tu objetivo.");
+    return React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
+        React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-[#3DDCFF] mb-3" }, "Calculadora de macros"),
+        weightInputRow,
+        results,
+        emptyState);
+}
+// ---------- Auth screen ----------
+function ProtocolCard({ categoryKey }) {
+    const [open, setOpen] = useState(false);
+    const protocol = PROTOCOLS[categoryKey];
+    if (!protocol)
+        return null;
+    return (React.createElement("div", { className: "bg-gradient-to-br from-[#11161F] to-[#0A0E14] border border-[#3DDCFF]/25 rounded-2xl p-4" },
+        React.createElement("button", { onClick: () => setOpen(!open), className: "w-full flex items-center justify-between text-left" },
+            React.createElement("div", null,
+                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-[#3DDCFF] mb-1" }, "Protocolo Premium"),
+                React.createElement("div", { className: "text-sm text-slate-100 font-medium" }, protocol.name)),
+            React.createElement(ChevronRight, { size: 16, className: `text-slate-500 transition-transform ${open ? "rotate-90" : ""}` })),
+        open && (React.createElement("ol", { className: "mt-4 space-y-2.5" }, protocol.days.map((d, i) => (React.createElement("li", { key: i, className: "flex gap-3 text-xs text-slate-400 leading-relaxed" },
+            React.createElement("span", { className: "font-mono text-[#3DDCFF] shrink-0" },
+                "D",
+                i + 1),
+            React.createElement("span", null, d))))))));
+}
+function AuthScreen({ onAuthed }) {
+    const [mode, setMode] = useState("login");
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+    const [info, setInfo] = useState("");
+    async function submit() {
+        if (!email || !password) {
+            setError("Completa correo y contraseña.");
+            return;
+        }
+        setError("");
+        setInfo("");
+        setLoading(true);
+        try {
+            if (mode === "login") {
+                const res = await fetch(`${AUTH}/token?grant_type=password`, {
+                    method: "POST",
+                    headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password }),
+                });
+                const data = await res.json();
+                if (!res.ok)
+                    throw new Error(data.error_description || data.msg || "No se pudo iniciar sesión.");
+                onAuthed({ accessToken: data.access_token, refreshToken: data.refresh_token, user: data.user });
+            }
+            else {
+                const res = await fetch(`${AUTH}/signup`, {
+                    method: "POST",
+                    headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password }),
+                });
+                const data = await res.json();
+                if (!res.ok)
+                    throw new Error(data.error_description || data.msg || "No se pudo crear la cuenta.");
+                if (data.access_token) {
+                    onAuthed({ accessToken: data.access_token, refreshToken: data.refresh_token, user: data.user });
+                }
+                else {
+                    setInfo("Cuenta creada. Revisa tu correo para confirmar, luego inicia sesión.");
+                    setMode("login");
+                }
+            }
+        }
+        catch (err) {
+            setError(err.message);
+        }
+        finally {
+            setLoading(false);
+        }
+    }
+    return (React.createElement("div", { className: "min-h-screen bg-[#0A0E14] flex items-center justify-center px-6" },
+        React.createElement("div", { className: "w-full max-w-sm" },
+            React.createElement("div", { className: "mb-8 text-center" },
+                React.createElement("div", { className: "inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#11161F] border border-[#1E2535] mb-4" },
+                    React.createElement(Activity, { size: 22, className: "text-[#3DDCFF]" })),
+                React.createElement("h1", { className: "font-display text-2xl text-slate-100 tracking-tight" }, "Biohacker Score"),
+                React.createElement("p", { className: "text-slate-500 text-sm mt-1" }, "Tu panel diario de optimizaci\u00F3n")),
+            React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-6 space-y-4" },
+                React.createElement("div", null,
+                    React.createElement("label", { className: "text-xs uppercase tracking-wider text-slate-500" }, "Correo"),
+                    React.createElement("input", { type: "email", value: email, onChange: (e) => setEmail(e.target.value), className: "w-full mt-1 bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF] transition-colors", placeholder: "tu@correo.com" })),
+                React.createElement("div", null,
+                    React.createElement("label", { className: "text-xs uppercase tracking-wider text-slate-500" }, "Contrase\u00F1a"),
+                    React.createElement("input", { type: "password", minLength: 6, value: password, onChange: (e) => setPassword(e.target.value), onKeyDown: (e) => { if (e.key === "Enter")
+                            submit(); }, className: "w-full mt-1 bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF] transition-colors", placeholder: "m\u00EDnimo 6 caracteres" })),
+                error && (React.createElement("div", { className: "flex items-start gap-2 text-[#FF6B5E] text-xs bg-[#FF6B5E]/10 border border-[#FF6B5E]/20 rounded-lg px-3 py-2" },
+                    React.createElement(AlertCircle, { size: 14, className: "mt-0.5 shrink-0" }),
+                    " ",
+                    error)),
+                info && (React.createElement("div", { className: "flex items-start gap-2 text-[#7FE3A3] text-xs bg-[#7FE3A3]/10 border border-[#7FE3A3]/20 rounded-lg px-3 py-2" },
+                    React.createElement(Check, { size: 14, className: "mt-0.5 shrink-0" }),
+                    " ",
+                    info)),
+                React.createElement("button", { type: "button", onClick: submit, disabled: loading, className: "w-full flex items-center justify-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg py-2.5 hover:brightness-110 transition disabled:opacity-50" }, loading ? React.createElement(Loader2, { size: 16, className: "animate-spin" }) : mode === "login" ? "Entrar" : "Crear cuenta")),
+            React.createElement("button", { onClick: () => { setMode(mode === "login" ? "signup" : "login"); setError(""); setInfo(""); }, className: "w-full text-center text-xs text-slate-500 mt-4 hover:text-slate-300 transition" }, mode === "login" ? "¿No tienes cuenta? Crea una" : "¿Ya tienes cuenta? Inicia sesión"))));
+}
+function BodyImageButton({ item, selected, onClick, accent }) {
+    return (React.createElement("button", { onClick: onClick, type: "button", className: `relative rounded-2xl overflow-hidden border-2 transition ${selected ? "" : "border-[#1E2535] opacity-70 hover:opacity-100"}`, style: selected ? { borderColor: accent, boxShadow: `0 0 0 1px ${accent}` } : {} },
+        React.createElement("img", { src: item.img, alt: item.label, className: "w-full h-36 object-cover object-top bg-[#11161F]" }),
+        React.createElement("div", { className: "absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5" },
+            React.createElement("span", { className: "text-[10px] text-slate-100 font-medium" }, item.label)),
+        selected && (React.createElement("div", { className: "absolute top-1.5 right-1.5 rounded-full p-0.5", style: { backgroundColor: accent } },
+            React.createElement(Check, { size: 11, className: "text-[#06121A]" })))));
+}
+function BodySelector({ draft, setDraft, onSave, saving, savedGender, savedCurrent, savedTarget, editing, setEditing }) {
+    const list = BODY_IMAGES[draft.gender];
+    return (React.createElement("section", null,
+        React.createElement("div", { className: "flex items-center justify-between mb-4" },
+            React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500" }, "Tu composici\u00F3n corporal"),
+            !editing && savedGender && (React.createElement("button", { onClick: () => setEditing(true), className: "text-xs text-[#3DDCFF] hover:brightness-110 transition" }, "Editar"))),
+        !editing && savedGender ? (React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+            React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-3 text-center" },
+                React.createElement("img", { src: BODY_IMAGES[savedGender][savedCurrent - 1].img, className: "w-full h-32 object-cover object-top rounded-xl mb-2" }),
+                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500" }, "Actual"),
+                React.createElement("div", { className: "text-xs text-slate-200" }, BODY_IMAGES[savedGender][savedCurrent - 1].label)),
+            React.createElement("div", { className: "bg-[#11161F] border border-[#3DDCFF]/30 rounded-2xl p-3 text-center" },
+                React.createElement("img", { src: BODY_IMAGES[savedGender][savedTarget - 1].img, className: "w-full h-32 object-cover object-top rounded-xl mb-2" }),
+                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-[#3DDCFF]" }, "Objetivo"),
+                React.createElement("div", { className: "text-xs text-slate-200" }, BODY_IMAGES[savedGender][savedTarget - 1].label)))) : (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 space-y-5" },
+            React.createElement("div", { className: "flex gap-2" }, ["male", "female"].map((g) => (React.createElement("button", { key: g, onClick: () => setDraft({ ...draft, gender: g }), className: `text-xs px-4 py-2 rounded-lg border transition ${draft.gender === g ? "border-[#3DDCFF] text-[#3DDCFF] bg-[#3DDCFF]/10" : "border-[#1E2535] text-slate-400"}` }, g === "male" ? "Masculino" : "Femenino")))),
+            React.createElement("div", null,
+                React.createElement("div", { className: "text-xs text-slate-400 mb-2" }, "\u00BFCu\u00E1l se parece m\u00E1s a tu composici\u00F3n actual?"),
+                React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-4 gap-2" }, list.map((item) => (React.createElement(BodyImageButton, { key: item.stage, item: item, accent: "#3DDCFF", selected: draft.current === item.stage, onClick: () => setDraft({ ...draft, current: item.stage }) }))))),
+            React.createElement("div", null,
+                React.createElement("div", { className: "text-xs text-slate-400 mb-2" }, "\u00BFA cu\u00E1l quieres llegar?"),
+                React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-4 gap-2" }, list.map((item) => (React.createElement(BodyImageButton, { key: item.stage, item: item, accent: "#7FE3A3", selected: draft.target === item.stage, onClick: () => setDraft({ ...draft, target: item.stage }) }))))),
+            React.createElement("button", { onClick: onSave, disabled: saving || !draft.current || !draft.target, className: "flex items-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-5 py-2 hover:brightness-110 transition disabled:opacity-40" },
+                saving ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : React.createElement(Check, { size: 14 }),
+                "Guardar composici\u00F3n")))));
+}
+// ---------- Coach: routine building blocks ----------
+function RoutineExerciseRow({ row, index, exerciseLibrary, onChange, onRemove }) {
+    const groupedOptions = MUSCLE_GROUP_ORDER
+        .map((g) => ({ group: g, items: exerciseLibrary.filter((ex) => ex.muscle_group === g) }))
+        .filter((g) => g.items.length > 0);
+    const currentInList = exerciseLibrary.some((ex) => ex.name === row.exercise);
+    return React.createElement("div", { className: "grid grid-cols-12 gap-2 items-center" },
+        React.createElement("select", { value: row.exercise, onChange: (e) => onChange(index, { ...row, exercise: e.target.value }), className: "col-span-5 bg-[#0A0E14] border border-[#1E2535] rounded-lg px-2 py-1.5 text-xs text-slate-200" },
+            React.createElement("option", { value: "" }, "Elige ejercicio"),
+            row.exercise && !currentInList && React.createElement("option", { value: row.exercise }, row.exercise),
+            groupedOptions.map((g) => React.createElement("optgroup", { key: g.group, label: MUSCLE_GROUP_LABELS[g.group] || g.group }, g.items.map((ex) => React.createElement("option", { key: ex.id, value: ex.name }, ex.name))))),
+        React.createElement("input", { type: "number", min: 1, value: row.sets, onChange: (e) => onChange(index, { ...row, sets: parseInt(e.target.value) || 1 }), className: "col-span-2 bg-[#0A0E14] border border-[#1E2535] rounded-lg px-2 py-1.5 text-xs text-slate-200", placeholder: "Sets" }),
+        React.createElement("input", { type: "text", value: row.reps, onChange: (e) => onChange(index, { ...row, reps: e.target.value }), className: "col-span-2 bg-[#0A0E14] border border-[#1E2535] rounded-lg px-2 py-1.5 text-xs text-slate-200", placeholder: "Reps" }),
+        React.createElement("input", { type: "number", min: 0, value: row.rest_seconds, onChange: (e) => onChange(index, { ...row, rest_seconds: parseInt(e.target.value) || 0 }), className: "col-span-2 bg-[#0A0E14] border border-[#1E2535] rounded-lg px-2 py-1.5 text-xs text-slate-200", placeholder: "Descanso (s)" }),
+        React.createElement("button", { type: "button", onClick: () => onRemove(index), className: "col-span-1 text-slate-500 hover:text-[#FF6B5E] transition text-xs" }, "\u2715"));
+}
+const EMPTY_ROUTINE_ROW = { exercise: "", sets: 3, reps: "8-10", rest_seconds: 60 };
+// ---------- Exercise library: levels, muscle groups, auto-generation ----------
+const DIFFICULTY_LEVELS = ["principiante", "intermedio", "avanzado"];
+const DIFFICULTY_LABELS = { principiante: "Principiante", intermedio: "Intermedio", avanzado: "Avanzado" };
+const MUSCLE_GROUP_ORDER = ["pecho", "espalda", "piernas", "hombros", "brazos", "core", "cardio", "movilidad", "full_body"];
+const MUSCLE_GROUP_LABELS = { pecho: "Pecho", espalda: "Espalda", piernas: "Piernas", hombros: "Hombros", brazos: "Brazos", core: "Core", cardio: "Cardio", movilidad: "Movilidad", full_body: "Full body" };
+const AUTO_ROUTINE_MUSCLE_GROUPS = ["pecho", "espalda", "piernas", "hombros", "core"];
+const AUTO_ROUTINE_DEFAULTS = {
+    principiante: { sets: 3, reps: "8-10", rest_seconds: 90 },
+    intermedio: { sets: 4, reps: "8-12", rest_seconds: 75 },
+    avanzado: { sets: 5, reps: "6-10", rest_seconds: 60 },
+};
+function generateAutoRoutine(level, exerciseLibrary) {
+    const defaults = AUTO_ROUTINE_DEFAULTS[level] || AUTO_ROUTINE_DEFAULTS.principiante;
+    const byGroup = {};
+    exerciseLibrary.filter((ex) => ex.difficulty_level === level).forEach((ex) => {
+        if (!byGroup[ex.muscle_group])
+            byGroup[ex.muscle_group] = [];
+        byGroup[ex.muscle_group].push(ex);
+    });
+    return AUTO_ROUTINE_MUSCLE_GROUPS
+        .filter((g) => byGroup[g] && byGroup[g].length > 0)
+        .map((g) => {
+        const options = byGroup[g];
+        const pick = options[Math.floor(Math.random() * options.length)];
+        return { exercise: pick.name, sets: defaults.sets, reps: defaults.reps, rest_seconds: defaults.rest_seconds };
+    });
+}
+function ExerciseCard({ exercise }) {
+    return React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
+        React.createElement("div", { className: "flex items-start justify-between gap-3" },
+            React.createElement("div", null,
+                React.createElement("div", { className: "text-sm text-slate-100 font-medium" }, exercise.name),
+                React.createElement("div", { className: "text-[11px] text-slate-500 mt-0.5" }, exercise.equipment || "Sin equipo")),
+            exercise.video_url && React.createElement("a", { href: exercise.video_url, target: "_blank", rel: "noopener noreferrer", className: "shrink-0 text-[11px] text-[#3DDCFF] border border-[#3DDCFF]/30 rounded-lg px-2 py-1 hover:bg-[#3DDCFF]/10 transition" }, "Ver en YouTube")),
+        exercise.instructions && React.createElement("div", { className: "text-xs text-slate-400 mt-2 leading-relaxed" }, exercise.instructions));
+}
+function ExerciseLibrary({ exercises, loading }) {
+    const [level, setLevel] = useState("principiante");
+    const filtered = exercises.filter((ex) => ex.difficulty_level === level);
+    const grouped = MUSCLE_GROUP_ORDER
+        .map((g) => ({ group: g, items: filtered.filter((ex) => ex.muscle_group === g) }))
+        .filter((g) => g.items.length > 0);
+    const levelTabs = React.createElement("div", { className: "flex gap-2 flex-wrap" }, DIFFICULTY_LEVELS.map((l) => React.createElement("button", { key: l, type: "button", onClick: () => setLevel(l), className: `text-xs px-3 py-1.5 rounded-lg border transition ${level === l ? "border-[#3DDCFF] text-[#3DDCFF] bg-[#3DDCFF]/10" : "border-[#1E2535] text-slate-400"}` }, DIFFICULTY_LABELS[l])));
+    let body;
+    if (loading) {
+        body = React.createElement("div", { className: "flex justify-center p-6" }, React.createElement(Loader2, { size: 18, className: "animate-spin text-slate-600" }));
+    }
+    else if (grouped.length === 0) {
+        body = React.createElement("div", { className: "text-sm text-slate-500" }, "Todavía no hay ejercicios cargados para este nivel.");
+    }
+    else {
+        body = React.createElement("div", { className: "space-y-5" }, grouped.map((g) => React.createElement("div", { key: g.group },
+            React.createElement("h4", { className: "text-[11px] uppercase tracking-wider text-slate-500 mb-2" }, MUSCLE_GROUP_LABELS[g.group] || g.group),
+            React.createElement("div", { className: "grid sm:grid-cols-2 gap-3" }, g.items.map((ex) => React.createElement(ExerciseCard, { key: ex.id, exercise: ex }))))));
+    }
+    return React.createElement("div", { className: "space-y-4" }, levelTabs, body);
+}
+function RoutineBuilder({ exerciseLibrary, templates, onCreate, creating }) {
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
+    const [rows, setRows] = useState([{ ...EMPTY_ROUTINE_ROW }]);
+    const [mode, setMode] = useState("manual");
+    const [level, setLevel] = useState("principiante");
+    const levelFilteredLibrary = exerciseLibrary.filter((ex) => ex.difficulty_level === level);
+    function generateAuto() {
+        const generated = generateAutoRoutine(level, exerciseLibrary);
+        if (generated.length > 0) {
+            setRows(generated);
+            if (!title)
+                setTitle(`Rutina automática — ${DIFFICULTY_LABELS[level]}`);
+        }
+    }
+    function applyTemplate(templateId) {
+        const t = templates.find((x) => x.id === templateId);
+        if (!t) return;
+        setTitle(t.title);
+        setDescription(t.description || "");
+        if (Array.isArray(t.content) && t.content.length > 0) {
+            setRows(t.content.map((r) => ({ exercise: r.exercise || "", sets: r.sets || 3, reps: r.reps || "", rest_seconds: r.rest_seconds || 60 })));
+        }
+    }
+    function updateRow(index, next) {
+        setRows(rows.map((r, i) => (i === index ? next : r)));
+    }
+    function removeRow(index) {
+        setRows(rows.filter((_, i) => i !== index));
+    }
+    function addRow() {
+        setRows([...rows, { ...EMPTY_ROUTINE_ROW }]);
+    }
+    async function submit() {
+        const content = rows.filter((r) => r.exercise);
+        if (!title || content.length === 0) return;
+        const ok = await onCreate({ title, description, content });
+        if (ok) {
+            setTitle("");
+            setDescription("");
+            setRows([{ ...EMPTY_ROUTINE_ROW }]);
+        }
+    }
+    const modeToggle = React.createElement("div", { className: "flex gap-2" }, ["manual", "auto"].map((m) => React.createElement("button", { key: m, type: "button", onClick: () => setMode(m), className: `text-xs px-3 py-1.5 rounded-lg border transition ${mode === m ? "border-[#3DDCFF] text-[#3DDCFF] bg-[#3DDCFF]/10" : "border-[#1E2535] text-slate-400"}` }, m === "manual" ? "Manual" : "Autom\u00E1tico")));
+    const levelSelect = React.createElement("select", { value: level, onChange: (e) => setLevel(e.target.value), className: "bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-xs text-slate-300" }, DIFFICULTY_LEVELS.map((l) => React.createElement("option", { key: l, value: l }, DIFFICULTY_LABELS[l])));
+    const manualControls = React.createElement("div", { className: "flex flex-wrap items-center gap-2" },
+        levelSelect,
+        templates.length > 0 && React.createElement("select", { onChange: (e) => applyTemplate(e.target.value), defaultValue: "", className: "flex-1 min-w-[180px] bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-xs text-slate-300" },
+            React.createElement("option", { value: "" }, "Empezar desde una plantilla (opcional)"),
+            templates.map((t) => React.createElement("option", { key: t.id, value: t.id }, t.title))));
+    const autoControls = React.createElement("div", { className: "flex items-center gap-2" },
+        levelSelect,
+        React.createElement("button", { type: "button", onClick: generateAuto, className: "text-xs bg-[#3DDCFF] text-[#06121A] font-medium rounded-lg px-4 py-2 hover:brightness-110 transition" }, "Generar rutina"));
+    return React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 space-y-3" },
+        modeToggle,
+        mode === "manual" ? manualControls : autoControls,
+        mode === "manual" && React.createElement("div", { className: "text-[11px] text-slate-500" }, "El selector de ejercicio abajo se filtra por el nivel elegido arriba."),
+        mode === "auto" && React.createElement("div", { className: "text-[11px] text-slate-500" }, "Se elige 1 ejercicio por grupo muscular principal seg\u00FAn el nivel. Puedes editar cualquier ejercicio antes de guardar."),
+        React.createElement("input", { type: "text", value: title, onChange: (e) => setTitle(e.target.value), placeholder: "T\u00EDtulo de la rutina", className: "w-full bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-[#3DDCFF]" }),
+        React.createElement("input", { type: "text", value: description, onChange: (e) => setDescription(e.target.value), placeholder: "Descripci\u00F3n (opcional)", className: "w-full bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-[#3DDCFF]" }),
+        React.createElement("div", { className: "space-y-2" }, rows.map((row, i) => React.createElement(RoutineExerciseRow, { key: i, row: row, index: i, exerciseLibrary: levelFilteredLibrary, onChange: updateRow, onRemove: removeRow }))),
+        React.createElement("button", { type: "button", onClick: addRow, className: "text-xs text-[#3DDCFF] hover:brightness-110 transition" }, "+ Agregar ejercicio"),
+        React.createElement("button", { type: "button", onClick: submit, disabled: creating, className: "flex items-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-5 py-2 hover:brightness-110 transition disabled:opacity-50" },
+            creating ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : React.createElement(Check, { size: 14 }),
+            "Guardar rutina"));
+}
+function RoutineCard({ routine, clients, assignedClientIds, onAssign, assigning }) {
+    const [selectedClient, setSelectedClient] = useState("");
+    const exercises = Array.isArray(routine.content) ? routine.content : [];
+    const assignedNames = clients.filter((c) => assignedClientIds.indexOf(c.client_id) !== -1).map((c) => c.full_name || c.email);
+    async function handleAssign() {
+        if (!selectedClient) return;
+        const ok = await onAssign(routine.id, selectedClient);
+        if (ok) setSelectedClient("");
+    }
+    return React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
+        React.createElement("div", { className: "text-sm text-slate-100 font-medium" }, routine.title),
+        routine.description && React.createElement("div", { className: "text-xs text-slate-500 mt-0.5" }, routine.description),
+        React.createElement("ul", { className: "mt-3 space-y-1" }, exercises.map((ex, i) => React.createElement("li", { key: i, className: "text-xs text-slate-400" }, React.createElement("span", { className: "text-slate-200" }, ex.exercise), ` \u2014 ${ex.sets}x${ex.reps}`, ex.rest_seconds ? `, ${ex.rest_seconds}s descanso` : ""))),
+        assignedNames.length > 0 && React.createElement("div", { className: "text-[11px] text-[#7FE3A3] mt-3" }, "Asignada a: ", assignedNames.join(", ")),
+        clients.length > 0 && React.createElement("div", { className: "flex gap-2 mt-3" },
+            React.createElement("select", { value: selectedClient, onChange: (e) => setSelectedClient(e.target.value), className: "flex-1 bg-[#0A0E14] border border-[#1E2535] rounded-lg px-2 py-1.5 text-xs text-slate-300" },
+                React.createElement("option", { value: "" }, "Asignar a cliente..."),
+                clients.map((c) => React.createElement("option", { key: c.client_id, value: c.client_id }, c.full_name || c.email))),
+            React.createElement("button", { type: "button", onClick: handleAssign, disabled: assigning || !selectedClient, className: "text-xs bg-[#3DDCFF] text-[#06121A] font-medium rounded-lg px-3 py-1.5 hover:brightness-110 transition disabled:opacity-40" }, "Asignar")));
+}
+function CoachClientsPanel({ clients, onAdd, adding, addError }) {
+    const [email, setEmail] = useState("");
+    async function submit() {
+        if (!email) return;
+        const ok = await onAdd(email);
+        if (ok) setEmail("");
+    }
+    return React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 space-y-3" },
+        clients.length === 0
+            ? React.createElement("div", { className: "text-sm text-slate-500" }, "Todav\u00EDa no tienes clientes vinculados.")
+            : React.createElement("ul", { className: "space-y-2" }, clients.map((c) => React.createElement("li", { key: c.client_id, className: "flex items-center justify-between text-sm text-slate-200" }, React.createElement("span", null, c.full_name || c.email), React.createElement("span", { className: "text-xs text-slate-500" }, c.email)))),
+        React.createElement("div", { className: "flex gap-2" },
+            React.createElement("input", { type: "email", value: email, onChange: (e) => setEmail(e.target.value), onKeyDown: (e) => { if (e.key === "Enter") submit(); }, placeholder: "correo@cliente.com", className: "flex-1 bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-[#3DDCFF]" }),
+            React.createElement("button", { type: "button", onClick: submit, disabled: adding, className: "flex items-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-4 py-2 hover:brightness-110 transition disabled:opacity-50" }, adding ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : "Agregar")),
+        addError && React.createElement("div", { className: "flex items-start gap-2 text-[#FF6B5E] text-xs bg-[#FF6B5E]/10 border border-[#FF6B5E]/20 rounded-lg px-3 py-2" }, React.createElement(AlertCircle, { size: 14, className: "mt-0.5 shrink-0" }), " ", addError));
+}
+function CoachPanel(props) {
+    const routineCards = props.routines.map((r) => React.createElement(RoutineCard, {
+        key: r.id,
+        routine: r,
+        clients: props.clients,
+        assignedClientIds: props.assignments.filter((a) => a.routine_id === r.id).map((a) => a.client_id),
+        onAssign: props.onAssign,
+        assigning: props.assigningRoutineId === r.id,
+    }));
+    return React.createElement("div", { className: "space-y-6" },
+        React.createElement("div", { className: "text-sm text-slate-400" }, props.businessName || "Tu panel de coach"),
+        React.createElement("div", null,
+            React.createElement("h3", { className: "text-[11px] uppercase tracking-wider text-slate-500 mb-2" }, "Clientes"),
+            React.createElement(CoachClientsPanel, { clients: props.clients, onAdd: props.onAddClient, adding: props.addingClient, addError: props.addClientError })),
+        React.createElement("div", null,
+            React.createElement("h3", { className: "text-[11px] uppercase tracking-wider text-slate-500 mb-2" }, "Nueva rutina"),
+            React.createElement(RoutineBuilder, { exerciseLibrary: props.exerciseLibrary, templates: props.templates, onCreate: props.onCreateRoutine, creating: props.creatingRoutine })),
+        React.createElement("div", null,
+            React.createElement("h3", { className: "text-[11px] uppercase tracking-wider text-slate-500 mb-2" }, "Tus rutinas"),
+            props.loading
+                ? React.createElement("div", { className: "flex justify-center p-6" }, React.createElement(Loader2, { size: 18, className: "animate-spin text-slate-600" }))
+                : props.routines.length === 0
+                    ? React.createElement("div", { className: "text-sm text-slate-500" }, "Todav\u00EDa no has creado rutinas.")
+                    : React.createElement("div", { className: "space-y-3" }, routineCards)));
+}
+function MyRoutinesSection({ assignments }) {
+    if (!assignments || assignments.length === 0)
+        return null;
+    const cards = assignments.map((a) => {
+        const routine = a.routines || {};
+        const exercises = Array.isArray(routine.content) ? routine.content : [];
+        return React.createElement("div", { key: a.id, className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
+            React.createElement("div", { className: "text-sm text-slate-100 font-medium" }, routine.title),
+            routine.description && React.createElement("div", { className: "text-xs text-slate-500 mt-0.5" }, routine.description),
+            React.createElement("ul", { className: "mt-3 space-y-1" }, exercises.map((ex, i) => React.createElement("li", { key: i, className: "text-xs text-slate-400" }, React.createElement("span", { className: "text-slate-200" }, ex.exercise), ` \u2014 ${ex.sets}x${ex.reps}`, ex.rest_seconds ? `, ${ex.rest_seconds}s descanso` : ""))),
+            a.notes && React.createElement("div", { className: "text-xs text-[#3DDCFF] mt-2" }, a.notes));
+    });
+    return React.createElement("section", null,
+        React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Mi rutina asignada"),
+        React.createElement("div", { className: "space-y-3" }, cards));
+}
+// ---------- Dashboard ----------
+function Dashboard({ session, onLogout, onRefreshSession }) {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const [entries, setEntries] = useState([]);
+    const [loadingEntries, setLoadingEntries] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [checkingPlan, setCheckingPlan] = useState(true);
+    const [goals, setGoals] = useState(DEFAULT_GOALS);
+    const [goalsDraft, setGoalsDraft] = useState(DEFAULT_GOALS);
+    const [editingGoals, setEditingGoals] = useState(false);
+    const [savingGoals, setSavingGoals] = useState(false);
+    const [bodyGender, setBodyGender] = useState(null);
+    const [bodyCurrentStage, setBodyCurrentStage] = useState(null);
+    const [bodyTargetStage, setBodyTargetStage] = useState(null);
+    const [bodyDraft, setBodyDraft] = useState({ gender: "male", current: null, target: null });
+    const [editingBody, setEditingBody] = useState(false);
+    const [savingBody, setSavingBody] = useState(false);
+    const [bodyWeightKg, setBodyWeightKg] = useState(null);
+    const [weightDraft, setWeightDraft] = useState(null);
+    const [savingWeight, setSavingWeight] = useState(false);
+    const [sleepHours, setSleepHours] = useState(7.5);
+    const [sleepQuality, setSleepQuality] = useState(7);
+    const [fastingHours, setFastingHours] = useState(14);
+    const [nutritionQuality, setNutritionQuality] = useState(7);
+    const [exerciseMinutes, setExerciseMinutes] = useState(30);
+    const [exerciseIntensity, setExerciseIntensity] = useState(6);
+    const [stressLevel, setStressLevel] = useState(4);
+    const [isPremium, setIsPremium] = useState(false);
+    const [premiumSource, setPremiumSource] = useState(null);
+    const [trialEndsAt, setTrialEndsAt] = useState(null);
+    const [nutritionRecs, setNutritionRecs] = useState([]);
+    const [supplementRecs, setSupplementRecs] = useState([]);
+    const [loadingPremiumContent, setLoadingPremiumContent] = useState(false);
+    const [isCoach, setIsCoach] = useState(false);
+    const [coachBusinessName, setCoachBusinessName] = useState(null);
+    const [coachClients, setCoachClients] = useState([]);
+    const [coachRoutines, setCoachRoutines] = useState([]);
+    const [coachAssignments, setCoachAssignments] = useState([]);
+    const [exerciseLibrary, setExerciseLibrary] = useState([]);
+    const [loadingExerciseLibrary, setLoadingExerciseLibrary] = useState(true);
+    const [publicTemplates, setPublicTemplates] = useState([]);
+    const [loadingCoachData, setLoadingCoachData] = useState(false);
+    const [addingClient, setAddingClient] = useState(false);
+    const [addClientError, setAddClientError] = useState("");
+    const [creatingRoutine, setCreatingRoutine] = useState(false);
+    const [assigningRoutineId, setAssigningRoutineId] = useState(null);
+    const [myRoutineAssignments, setMyRoutineAssignments] = useState([]);
+    const [activeTab, setActiveTab] = useState("inicio");
+    const [healthSyncing, setHealthSyncing] = useState(false);
+    const [healthSyncMessage, setHealthSyncMessage] = useState("");
+    const authHeaders = { apikey: ANON_KEY, Authorization: `Bearer ${session.accessToken}`, "Content-Type": "application/json" };
+    useEffect(() => { loadEntries(); loadPlan(); checkCoachStatus(); loadMyRoutineAssignments(); loadExerciseLibrary(); }, []);
+    useEffect(() => {
+        const id = setInterval(() => onRefreshSession === null || onRefreshSession === void 0 ? void 0 : onRefreshSession(), 45 * 60 * 1000);
+        return () => clearInterval(id);
+    }, [onRefreshSession]);
+    useEffect(() => { if (isPremium)
+        loadPremiumContent(); }, [isPremium]);
+    useEffect(() => { if (isCoach)
+        loadCoachData(); }, [isCoach]);
+    async function checkCoachStatus() {
+        try {
+            const res = await fetch(`${REST}/coaches?id=eq.${session.user.id}&select=business_name`, { headers: authHeaders });
+            const data = await res.json();
+            if (Array.isArray(data) && data[0]) {
+                setIsCoach(true);
+                setCoachBusinessName(data[0].business_name || null);
+            }
+        }
+        catch (e) {
+            console.error(e);
+        }
+    }
+    async function loadMyRoutineAssignments() {
+        try {
+            const res = await fetch(`${REST}/routine_assignments?client_id=eq.${session.user.id}&select=id,assigned_at,notes,routines(title,description,content)`, { headers: authHeaders });
+            const data = await res.json();
+            setMyRoutineAssignments(Array.isArray(data) ? data : []);
+        }
+        catch (e) {
+            console.error(e);
+        }
+    }
+    async function loadExerciseLibrary() {
+        setLoadingExerciseLibrary(true);
+        try {
+            const res = await fetch(`${REST}/exercises?select=id,name,muscle_group,equipment,instructions,video_url,difficulty_level&order=difficulty_level.asc,muscle_group.asc,name.asc`, { headers: authHeaders });
+            const data = await res.json();
+            setExerciseLibrary(Array.isArray(data) ? data : []);
+        }
+        catch (e) {
+            console.error(e);
+        }
+        finally {
+            setLoadingExerciseLibrary(false);
+        }
+    }
+    async function loadCoachData() {
+        setLoadingCoachData(true);
+        try {
+            const [clientsRes, routinesRes, assignmentsRes, templatesRes] = await Promise.all([
+                fetch(`${REST}/coach_clients?coach_id=eq.${session.user.id}&select=client_id,profiles(email,full_name)`, { headers: authHeaders }),
+                fetch(`${REST}/routines?coach_id=eq.${session.user.id}&select=*&order=updated_at.desc`, { headers: authHeaders }),
+                fetch(`${REST}/routine_assignments?select=id,routine_id,client_id`, { headers: authHeaders }),
+                fetch(`${REST}/routine_templates?is_public=eq.true&select=id,title,description,content`, { headers: authHeaders }),
+            ]);
+            const [clientsData, routinesData, assignmentsData, templatesData] = await Promise.all([
+                clientsRes.json(), routinesRes.json(), assignmentsRes.json(), templatesRes.json(),
+            ]);
+            setCoachClients(Array.isArray(clientsData) ? clientsData.map((c) => ({ client_id: c.client_id, email: c.profiles ? c.profiles.email : null, full_name: c.profiles ? c.profiles.full_name : null })) : []);
+            setCoachRoutines(Array.isArray(routinesData) ? routinesData : []);
+            setCoachAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
+            setPublicTemplates(Array.isArray(templatesData) ? templatesData : []);
+        }
+        catch (e) {
+            console.error(e);
+        }
+        finally {
+            setLoadingCoachData(false);
+        }
+    }
+    async function handleAddClient(email) {
+        setAddingClient(true);
+        setAddClientError("");
+        try {
+            const res = await fetch(`${REST}/rpc/add_coach_client_by_email`, {
+                method: "POST",
+                headers: authHeaders,
+                body: JSON.stringify({ p_email: email }),
+            });
+            const data = await res.json();
+            if (!res.ok)
+                throw new Error((data && data.message) || "No se pudo agregar el cliente.");
+            await loadCoachData();
+            return true;
+        }
+        catch (e) {
+            setAddClientError(e.message);
+            return false;
+        }
+        finally {
+            setAddingClient(false);
+        }
+    }
+    async function handleCreateRoutine({ title, description, content }) {
+        setCreatingRoutine(true);
+        try {
+            const res = await fetch(`${REST}/routines`, {
+                method: "POST",
+                headers: { ...authHeaders, Prefer: "return=minimal" },
+                body: JSON.stringify({ coach_id: session.user.id, title, description, content }),
+            });
+            if (!res.ok)
+                throw new Error("No se pudo guardar la rutina.");
+            await loadCoachData();
+            return true;
+        }
+        catch (e) {
+            console.error(e);
+            return false;
+        }
+        finally {
+            setCreatingRoutine(false);
+        }
+    }
+    async function handleAssignRoutine(routineId, clientId) {
+        setAssigningRoutineId(routineId);
+        try {
+            const res = await fetch(`${REST}/routine_assignments`, {
+                method: "POST",
+                headers: { ...authHeaders, Prefer: "return=minimal" },
+                body: JSON.stringify({ routine_id: routineId, client_id: clientId }),
+            });
+            if (!res.ok)
+                throw new Error("No se pudo asignar la rutina.");
+            await loadCoachData();
+            return true;
+        }
+        catch (e) {
+            console.error(e);
+            return false;
+        }
+        finally {
+            setAssigningRoutineId(null);
+        }
+    }
+    async function loadPlan() {
+        setCheckingPlan(true);
+        try {
+            const res = await fetch(`${REST}/profiles?id=eq.${session.user.id}&select=goal_sleep_hours,goal_fasting_hours,goal_exercise_minutes,goal_stress_max,body_gender,body_current_stage,body_target_stage,weight_kg,premium_source,trial_ends_at`, { headers: authHeaders });
+            const data = await res.json();
+            if (Array.isArray(data) && data[0]) {
+                setPremiumSource(data[0].premium_source || null);
+                setTrialEndsAt(data[0].trial_ends_at || null);
+                const g = {
+                    sleepHours: Number(data[0].goal_sleep_hours) || DEFAULT_GOALS.sleepHours,
+                    fastingHours: Number(data[0].goal_fasting_hours) || DEFAULT_GOALS.fastingHours,
+                    exerciseMinutes: Number(data[0].goal_exercise_minutes) || DEFAULT_GOALS.exerciseMinutes,
+                    stressMax: Number(data[0].goal_stress_max) || DEFAULT_GOALS.stressMax,
+                };
+                setGoals(g);
+                setGoalsDraft(g);
+                const gender = data[0].body_gender || null;
+                const current = data[0].body_current_stage || null;
+                const target = data[0].body_target_stage || null;
+                setBodyGender(gender);
+                setBodyCurrentStage(current);
+                setBodyTargetStage(target);
+                setBodyDraft({ gender: gender || "male", current, target });
+                if (!gender)
+                    setEditingBody(true);
+                const weight = data[0].weight_kg != null ? Number(data[0].weight_kg) : null;
+                setBodyWeightKg(weight);
+                setWeightDraft(weight);
+            }
+            const premRes = await fetch(`${REST}/rpc/is_premium`, {
+                method: "POST",
+                headers: authHeaders,
+                body: JSON.stringify({ profile_id: session.user.id }),
+            });
+            const premData = await premRes.json();
+            setIsPremium(premData === true);
+        }
+        catch (e) {
+            console.error(e);
+            setIsPremium(false);
+        }
+        finally {
+            setCheckingPlan(false);
+        }
+    }
+    async function loadPremiumContent() {
+        setLoadingPremiumContent(true);
+        try {
+            const [suppRes, nutriRes] = await Promise.all([
+                fetch(`${REST}/supplement_recommendations?select=*&order=display_order.asc`, { headers: authHeaders }),
+                fetch(`${REST}/nutrition_recommendations?select=*&order=display_order.asc`, { headers: authHeaders }),
+            ]);
+            const [suppData, nutriData] = await Promise.all([suppRes.json(), nutriRes.json()]);
+            setSupplementRecs(Array.isArray(suppData) ? suppData : []);
+            setNutritionRecs(Array.isArray(nutriData) ? nutriData : []);
+        }
+        catch (e) {
+            console.error(e);
+        }
+        finally {
+            setLoadingPremiumContent(false);
+        }
+    }
+    async function saveBody() {
+        if (!bodyDraft.current || !bodyDraft.target)
+            return;
+        setSavingBody(true);
+        try {
+            const res = await fetch(`${REST}/profiles?id=eq.${session.user.id}`, {
+                method: "PATCH",
+                headers: { ...authHeaders, Prefer: "return=minimal" },
+                body: JSON.stringify({
+                    body_gender: bodyDraft.gender,
+                    body_current_stage: bodyDraft.current,
+                    body_target_stage: bodyDraft.target,
+                }),
+            });
+            if (!res.ok)
+                throw new Error("No se pudo guardar la composición.");
+            setBodyGender(bodyDraft.gender);
+            setBodyCurrentStage(bodyDraft.current);
+            setBodyTargetStage(bodyDraft.target);
+            setEditingBody(false);
+        }
+        catch (e) {
+            console.error(e);
+        }
+        finally {
+            setSavingBody(false);
+        }
+    }
+    async function saveWeight() {
+        if (!weightDraft)
+            return;
+        setSavingWeight(true);
+        try {
+            const res = await fetch(`${REST}/profiles?id=eq.${session.user.id}`, {
+                method: "PATCH",
+                headers: { ...authHeaders, Prefer: "return=minimal" },
+                body: JSON.stringify({ weight_kg: weightDraft }),
+            });
+            if (!res.ok)
+                throw new Error("No se pudo guardar el peso.");
+            setBodyWeightKg(weightDraft);
+        }
+        catch (e) {
+            console.error(e);
+        }
+        finally {
+            setSavingWeight(false);
+        }
+    }
+    async function saveGoals() {
+        setSavingGoals(true);
+        try {
+            const res = await fetch(`${REST}/profiles?id=eq.${session.user.id}`, {
+                method: "PATCH",
+                headers: { ...authHeaders, Prefer: "return=minimal" },
+                body: JSON.stringify({
+                    goal_sleep_hours: goalsDraft.sleepHours,
+                    goal_fasting_hours: goalsDraft.fastingHours,
+                    goal_exercise_minutes: goalsDraft.exerciseMinutes,
+                    goal_stress_max: goalsDraft.stressMax,
+                }),
+            });
+            if (!res.ok)
+                throw new Error("No se pudo guardar la meta.");
+            setGoals(goalsDraft);
+            setEditingGoals(false);
+        }
+        catch (e) {
+            console.error(e);
+        }
+        finally {
+            setSavingGoals(false);
+        }
+    }
+    async function loadEntries() {
+        var _a, _b, _c, _d, _e, _f, _g;
+        setLoadingEntries(true);
+        try {
+            const res = await fetch(`${REST}/daily_entries?user_id=eq.${session.user.id}&order=entry_date.asc&limit=60`, { headers: authHeaders });
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                setEntries(data);
+                const todayEntry = data.find((e) => e.entry_date === todayStr);
+                if (todayEntry) {
+                    setSleepHours((_a = todayEntry.sleep_hours) !== null && _a !== void 0 ? _a : 7.5);
+                    setSleepQuality((_b = todayEntry.sleep_quality) !== null && _b !== void 0 ? _b : 7);
+                    setFastingHours((_c = todayEntry.fasting_hours) !== null && _c !== void 0 ? _c : 14);
+                    setNutritionQuality((_d = todayEntry.nutrition_quality) !== null && _d !== void 0 ? _d : 7);
+                    setExerciseMinutes((_e = todayEntry.exercise_minutes) !== null && _e !== void 0 ? _e : 30);
+                    setExerciseIntensity((_f = todayEntry.exercise_intensity) !== null && _f !== void 0 ? _f : 6);
+                    setStressLevel((_g = todayEntry.stress_level) !== null && _g !== void 0 ? _g : 4);
+                }
+            }
+        }
+        catch (e) {
+            console.error(e);
+        }
+        finally {
+            setLoadingEntries(false);
+        }
+    }
+    async function saveToday() {
+        setSaving(true);
+        setSaved(false);
+        try {
+            const payload = {
+                user_id: session.user.id, entry_date: todayStr,
+                sleep_hours: sleepHours, sleep_quality: sleepQuality,
+                fasting_hours: fastingHours, nutrition_quality: nutritionQuality,
+                exercise_minutes: exerciseMinutes, exercise_intensity: exerciseIntensity,
+                stress_level: stressLevel,
+            };
+            const res = await fetch(`${REST}/daily_entries?on_conflict=user_id,entry_date`, {
+                method: "POST",
+                headers: { ...authHeaders, Prefer: "resolution=merge-duplicates,return=representation" },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok)
+                throw new Error("No se pudo guardar.");
+            await loadEntries();
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
+        }
+        catch (e) {
+            console.error(e);
+        }
+        finally {
+            setSaving(false);
+        }
+    }
+    async function syncFromHealth() {
+        if (!isNativeApp || !window.CapacitorHealth)
+            return;
+        setHealthSyncing(true);
+        setHealthSyncMessage("");
+        try {
+            const { available } = await window.CapacitorHealth.isHealthAvailable();
+            if (!available) {
+                setHealthSyncMessage("Health Connect no está instalado en este dispositivo.");
+                return;
+            }
+            await window.CapacitorHealth.requestHealthPermissions({ permissions: HEALTH_PERMISSIONS });
+            const dayStart = new Date();
+            dayStart.setHours(0, 0, 0, 0);
+            const { workouts } = await window.CapacitorHealth.queryWorkouts({
+                startDate: dayStart.toISOString(),
+                endDate: new Date().toISOString(),
+                includeHeartRate: false,
+                includeRoute: false,
+                includeSteps: false,
+            });
+            const totalMinutesToday = (workouts || []).reduce((sum, w) => sum + (w.duration || 0) / 60, 0);
+            if (totalMinutesToday > 0) {
+                setExerciseMinutes(Math.round(totalMinutesToday));
+                setHealthSyncMessage(`Traído de Salud: ${Math.round(totalMinutesToday)} min de ejercicio hoy. Revisa y guarda cuando quieras.`);
+            }
+            else {
+                setHealthSyncMessage("No se encontraron entrenamientos registrados hoy en Salud.");
+            }
+        }
+        catch (e) {
+            console.error(e);
+            setHealthSyncMessage("No se pudo leer datos de Salud.");
+        }
+        finally {
+            setHealthSyncing(false);
+        }
+    }
+    const todayScores = useMemo(() => ({
+        sleep: sleepScore(sleepHours, sleepQuality, goals.sleepHours),
+        nutrition: nutritionScore(fastingHours, nutritionQuality, goals.fastingHours),
+        exercise: exerciseScore(exerciseMinutes, exerciseIntensity, goals.exerciseMinutes),
+        stress: stressScore(stressLevel, goals.stressMax),
+    }), [sleepHours, sleepQuality, fastingHours, nutritionQuality, exerciseMinutes, exerciseIntensity, stressLevel, goals]);
+    const total = totalScore(todayScores);
+    const recommendations = useMemo(() => buildRecommendations(todayScores), [todayScores]);
+    const weakestKey = recommendations.length > 0 ? recommendations[0].key : null;
+    const streak = useMemo(() => computeStreak(entries), [entries]);
+    const weekly = useMemo(() => weeklyComparison(entries, goals), [entries, goals]);
+    const categories = [
+        { key: "sleep", label: "Sueño", value: todayScores.sleep, color: "#3DDCFF" },
+        { key: "nutrition", label: "Ayuno / Nutrición", value: todayScores.nutrition, color: "#7FE3A3" },
+        { key: "exercise", label: "Ejercicio", value: todayScores.exercise, color: "#FFC857" },
+        { key: "stress", label: "Estrés", value: todayScores.stress, color: "#C792FF" },
+    ];
+    const chartData = entries.map((e) => {
+        const s = {
+            sleep: sleepScore(e.sleep_hours, e.sleep_quality, goals.sleepHours),
+            nutrition: nutritionScore(e.fasting_hours, e.nutrition_quality, goals.fastingHours),
+            exercise: exerciseScore(e.exercise_minutes, e.exercise_intensity, goals.exerciseMinutes),
+            stress: stressScore(e.stress_level, goals.stressMax),
+        };
+        return { date: e.entry_date.slice(5), total: totalScore(s) != null ? Math.round(totalScore(s)) : null };
+    });
+    const goalDirection = useMemo(() => goalDirectionFromBody(bodyCurrentStage, bodyTargetStage), [bodyCurrentStage, bodyTargetStage]);
+    const suggested = useMemo(() => suggestedGoals(goalDirection), [goalDirection]);
+    const matchedNutrition = useMemo(() => nutritionRecs.find((n) => n.goal_direction === goalDirection) || null, [nutritionRecs, goalDirection]);
+    const showAdaptiveNote = matchedNutrition != null && adaptiveNoteApplies(goalDirection, { stressLevel, exerciseMinutes, sleepHours, goalSleepHours: goals.sleepHours });
+    const macros = useMemo(() => computeMacros(weightDraft, matchedNutrition), [weightDraft, matchedNutrition]);
+    const weakestSupplementGoal = weakestKey ? CATEGORY_TO_SUPPLEMENT_GOAL[weakestKey] : null;
+    const sortedSupplements = useMemo(() => {
+        return [...supplementRecs].sort((a, b) => {
+            const aMatch = a.goal_category === weakestSupplementGoal ? 0 : 1;
+            const bMatch = b.goal_category === weakestSupplementGoal ? 0 : 1;
+            if (aMatch !== bMatch)
+                return aMatch - bMatch;
+            return a.display_order - b.display_order;
+        });
+    }, [supplementRecs, weakestSupplementGoal]);
+    function premiumTeaser(label) {
+        return React.createElement("div", { className: "relative bg-[#11161F] border border-[#1E2535] rounded-2xl p-6 overflow-hidden" },
+            React.createElement("div", { className: "space-y-3 blur-sm select-none pointer-events-none" },
+                React.createElement("div", { className: "h-4 w-2/3 bg-[#1E2535] rounded" }),
+                React.createElement("div", { className: "h-3 w-full bg-[#1E2535] rounded" }),
+                React.createElement("div", { className: "h-3 w-5/6 bg-[#1E2535] rounded" })),
+            React.createElement("div", { className: "absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0A0E14]/70" },
+                React.createElement("span", { className: "text-sm text-slate-200" }, label),
+                React.createElement("a", { href: `${STRIPE_PAYMENT_LINK}?client_reference_id=${session.user.id}`, target: "_blank", rel: "noopener noreferrer", className: "text-xs bg-[#3DDCFF] text-[#06121A] font-medium rounded-lg px-4 py-2 hover:brightness-110 transition" }, "Desbloquear con Premium")));
+    }
+    function premiumLoading() {
+        return React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-6 flex justify-center" }, React.createElement(Loader2, { size: 18, className: "animate-spin text-slate-600" }));
+    }
+    let nutritionContent;
+    let supplementsContent;
+    if (!isPremium) {
+        nutritionContent = premiumTeaser("Plan de nutrición personalizado");
+        supplementsContent = premiumTeaser("Suplementos sugeridos personalizados");
+    }
+    else if (loadingPremiumContent) {
+        nutritionContent = premiumLoading();
+        supplementsContent = premiumLoading();
+    }
+    else {
+        const macroCalculator = React.createElement(MacroCalculatorCard, { weightDraft: weightDraft, onWeightChange: setWeightDraft, onSave: saveWeight, saving: savingWeight, macros: macros, goalLabel: GOAL_DIRECTION_LABELS[goalDirection] || "Sin definir" });
+        const nutritionPlanBlock = matchedNutrition
+            ? React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" }, React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-[#7FE3A3] mb-1" }, "Nutrición — ", GOAL_DIRECTION_LABELS[goalDirection]), React.createElement("div", { className: "text-sm text-slate-100 font-medium mb-2" }, matchedNutrition.title), React.createElement("div", { className: "text-xs text-slate-400 leading-relaxed space-y-2" }, React.createElement("div", null, React.createElement("span", { className: "text-slate-300" }, "Macros: "), matchedNutrition.macro_guidance), React.createElement("div", null, React.createElement("span", { className: "text-slate-300" }, "Horarios: "), matchedNutrition.meal_timing_guidance), React.createElement("div", null, React.createElement("span", { className: "text-slate-300" }, "Ejemplos: "), matchedNutrition.food_examples), React.createElement("div", null, React.createElement("span", { className: "text-slate-300" }, "Limita: "), matchedNutrition.foods_to_limit), showAdaptiveNote ? React.createElement("div", { className: "mt-2 bg-[#3DDCFF]/10 border border-[#3DDCFF]/20 rounded-lg px-3 py-2 text-[#3DDCFF]" }, matchedNutrition.adaptive_note) : null))
+            : React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 text-sm text-slate-500" }, "Selecciona tu composición corporal arriba para ver tu plan de nutrición.");
+        nutritionContent = React.createElement("div", { className: "space-y-3" }, macroCalculator, nutritionPlanBlock);
+        const supplementCards = sortedSupplements.map((s) => React.createElement("div", { key: s.id, className: `bg-[#11161F] border rounded-2xl p-4 ${s.goal_category === weakestSupplementGoal ? "border-[#3DDCFF]/40" : "border-[#1E2535]"}` }, React.createElement("div", { className: "flex items-center justify-between mb-1" }, React.createElement("span", { className: "text-sm text-slate-100 font-medium" }, s.name), React.createElement("span", { className: `text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded ${s.evidence_tier === "strong" ? "text-[#7FE3A3] bg-[#7FE3A3]/10" : "text-[#FFC857] bg-[#FFC857]/10"}` }, s.evidence_tier === "strong" ? "Evidencia fuerte" : "Evidencia moderada")), React.createElement("div", { className: "text-xs text-slate-400 leading-relaxed mb-2" }, s.why_it_works), React.createElement("div", { className: "text-[11px] text-slate-500 font-mono mb-2" }, s.dosage_range), s.amazon_affiliate_url ? React.createElement("a", { href: s.amazon_affiliate_url, target: "_blank", rel: "noopener noreferrer sponsored", className: "text-xs text-[#3DDCFF] hover:brightness-110 transition" }, "Ver en Amazon →") : null));
+        supplementsContent = supplementCards.length > 0 ? React.createElement("div", { className: "grid sm:grid-cols-2 gap-3" }, supplementCards) : React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 text-sm text-slate-500" }, "No hay suplementos disponibles todavía.");
+    }
+    const TABS = [
+        { key: "inicio", label: "Inicio" },
+        { key: "entrenamiento", label: "Entrenamiento" },
+        { key: "nutricion", label: "Nutrición" },
+        { key: "suplementos", label: "Suplementos" },
+        { key: "metas", label: "Metas" },
+    ];
+    const tabNav = React.createElement("nav", { className: "flex gap-1 overflow-x-auto border-b border-[#1E2535] mb-2 sm:justify-center" }, TABS.map((t) => React.createElement("button", { key: t.key, type: "button", onClick: () => setActiveTab(t.key), className: `shrink-0 text-xs sm:text-sm px-4 py-2.5 border-b-2 transition ${activeTab === t.key ? "border-[#3DDCFF] text-[#3DDCFF]" : "border-transparent text-slate-500 hover:text-slate-300"}` }, t.label)));
+    return (React.createElement("div", { className: "min-h-screen bg-[#0A0E14] text-slate-100" },
+        React.createElement("header", { className: "border-b border-[#1E2535] px-6 py-4 flex items-center justify-between sticky top-0 bg-[#0A0E14]/90 backdrop-blur z-10" },
+            React.createElement("div", { className: "flex items-center gap-2" },
+                React.createElement(Activity, { size: 18, className: "text-[#3DDCFF]" }),
+                React.createElement("span", { className: "font-display text-sm tracking-tight" }, "Biohacker Score")),
+            React.createElement("div", { className: "flex items-center gap-4" },
+                React.createElement("span", { className: "text-xs text-slate-500 hidden sm:inline" }, session.user.email),
+                React.createElement("button", { onClick: onLogout, className: "text-slate-500 hover:text-slate-200 transition" },
+                    React.createElement(LogOut, { size: 16 })))),
+        React.createElement("main", { className: "max-w-4xl mx-auto px-6 py-10 space-y-10" },
+            tabNav,
+            activeTab === "inicio" && React.createElement("section", { className: "flex flex-col items-center" },
+                React.createElement(ScoreRing, { categories: categories, total: total }),
+                streak > 0 && (React.createElement("div", { className: "flex items-center gap-1.5 mt-3 text-sm" },
+                    React.createElement("span", null, "\uD83D\uDD25"),
+                    React.createElement("span", { className: "font-mono text-slate-200" }, streak),
+                    React.createElement("span", { className: "text-slate-500" }, streak === 1 ? "día seguido" : "días seguidos"))),
+                React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-4 gap-3 mt-8 w-full max-w-md" }, categories.map((c) => (React.createElement("div", { key: c.key, className: "text-center" },
+                    React.createElement("div", { className: "font-mono text-lg", style: { color: scoreColor(c.value) } }, c.value != null ? Math.round(c.value) : "--"),
+                    React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, c.label)))))),
+            activeTab === "inicio" && React.createElement(BodySelector, { draft: bodyDraft, setDraft: setBodyDraft, onSave: saveBody, saving: savingBody, savedGender: bodyGender, savedCurrent: bodyCurrentStage, savedTarget: bodyTargetStage, editing: editingBody, setEditing: setEditingBody }),
+            activeTab === "metas" && isPremium && (React.createElement("section", null,
+                React.createElement("div", { className: "flex items-center justify-between mb-4" },
+                    React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500" }, "Tus metas"),
+                    React.createElement("button", { onClick: () => { setGoalsDraft(goals); setEditingGoals(!editingGoals); }, className: "text-xs text-[#3DDCFF] hover:brightness-110 transition" }, editingGoals ? "Cancelar" : "Editar metas")),
+                !editingGoals && matchedNutrition && (React.createElement("div", { className: "bg-[#11161F] border border-[#3DDCFF]/25 rounded-2xl p-4 mb-4 flex items-center justify-between gap-4" },
+                    React.createElement("div", null,
+                        React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-[#3DDCFF] mb-1" }, "Según tu composición corporal"),
+                        React.createElement("div", { className: "text-sm text-slate-100 font-medium" }, GOAL_DIRECTION_LABELS[goalDirection]),
+                        React.createElement("div", { className: "text-xs text-slate-400 mt-1" }, matchedNutrition.title)),
+                    React.createElement("span", { className: "text-[10px] text-slate-500 shrink-0" }, "Ver detalle abajo ↓"))),
+                editingGoals ? (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 space-y-4" },
+                    React.createElement("button", { type: "button", onClick: () => setGoalsDraft(suggested), className: "text-xs text-[#06121A] bg-[#3DDCFF] font-medium rounded-lg px-3 py-1.5 hover:brightness-110 transition" }, "Usar todas las sugerencias"),
+                    React.createElement("div", { className: "grid sm:grid-cols-2 gap-3" },
+                        React.createElement("label", { className: "text-xs text-slate-400" },
+                            React.createElement("div", { className: "flex items-center justify-between gap-2" },
+                                React.createElement("span", null, "Meta de sue\u00F1o (h)"),
+                                React.createElement(SuggestedGoalChip, { value: suggested.sleepHours, unit: "h", onApply: () => setGoalsDraft({ ...goalsDraft, sleepHours: suggested.sleepHours }) })),
+                            React.createElement("input", { type: "number", step: "0.5", value: goalsDraft.sleepHours, onChange: (e) => setGoalsDraft({ ...goalsDraft, sleepHours: parseFloat(e.target.value) || 0 }), className: "w-full mt-1 bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
+                        React.createElement("label", { className: "text-xs text-slate-400" },
+                            React.createElement("div", { className: "flex items-center justify-between gap-2" },
+                                React.createElement("span", null, "Meta de ayuno (h)"),
+                                React.createElement(SuggestedGoalChip, { value: suggested.fastingHours, unit: "h", onApply: () => setGoalsDraft({ ...goalsDraft, fastingHours: suggested.fastingHours }) })),
+                            React.createElement("input", { type: "number", step: "0.5", value: goalsDraft.fastingHours, onChange: (e) => setGoalsDraft({ ...goalsDraft, fastingHours: parseFloat(e.target.value) || 0 }), className: "w-full mt-1 bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
+                        React.createElement("label", { className: "text-xs text-slate-400" },
+                            React.createElement("div", { className: "flex items-center justify-between gap-2" },
+                                React.createElement("span", null, "Meta de ejercicio (min)"),
+                                React.createElement(SuggestedGoalChip, { value: suggested.exerciseMinutes, unit: "min", onApply: () => setGoalsDraft({ ...goalsDraft, exerciseMinutes: suggested.exerciseMinutes }) })),
+                            React.createElement("input", { type: "number", step: "5", value: goalsDraft.exerciseMinutes, onChange: (e) => setGoalsDraft({ ...goalsDraft, exerciseMinutes: parseFloat(e.target.value) || 0 }), className: "w-full mt-1 bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
+                        React.createElement("label", { className: "text-xs text-slate-400" },
+                            React.createElement("div", { className: "flex items-center justify-between gap-2" },
+                                React.createElement("span", null, "Tope de estr\u00E9s (1-9)"),
+                                React.createElement(SuggestedGoalChip, { value: suggested.stressMax, unit: "", onApply: () => setGoalsDraft({ ...goalsDraft, stressMax: suggested.stressMax }) })),
+                            React.createElement("input", { type: "number", step: "1", min: "1", max: "9", value: goalsDraft.stressMax, onChange: (e) => setGoalsDraft({ ...goalsDraft, stressMax: parseFloat(e.target.value) || 0 }), className: "w-full mt-1 bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" }))),
+                    React.createElement("button", { onClick: saveGoals, disabled: savingGoals, className: "flex items-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-5 py-2 hover:brightness-110 transition disabled:opacity-50" },
+                        savingGoals ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : React.createElement(Check, { size: 14 }),
+                        "Guardar metas"))) : (React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-4 gap-3" },
+                    React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-3 text-center" },
+                        React.createElement("div", { className: "font-mono text-sm text-slate-200" },
+                            goals.sleepHours,
+                            "h"),
+                        React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Sue\u00F1o")),
+                    React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-3 text-center" },
+                        React.createElement("div", { className: "font-mono text-sm text-slate-200" },
+                            goals.fastingHours,
+                            "h"),
+                        React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Ayuno")),
+                    React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-3 text-center" },
+                        React.createElement("div", { className: "font-mono text-sm text-slate-200" },
+                            goals.exerciseMinutes,
+                            "min"),
+                        React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Ejercicio")),
+                    React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-3 text-center" },
+                        React.createElement("div", { className: "font-mono text-sm text-slate-200" },
+                            "\u2264",
+                            goals.stressMax),
+                        React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Estr\u00E9s")))))),
+            activeTab === "metas" && !isPremium && React.createElement("section", null,
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Tus metas"),
+                premiumTeaser("Metas personalizadas por categor\u00EDa")),
+            activeTab === "inicio" && React.createElement("section", null,
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Registro de hoy"),
+                isNativeApp && React.createElement("div", { className: "mb-4" },
+                    React.createElement("button", { type: "button", onClick: syncFromHealth, disabled: healthSyncing, className: "flex items-center gap-2 text-xs text-[#3DDCFF] border border-[#3DDCFF]/30 rounded-lg px-3 py-2 hover:bg-[#3DDCFF]/10 transition disabled:opacity-50" },
+                        healthSyncing ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : React.createElement(Activity, { size: 14 }),
+                        "Traer minutos de ejercicio de Salud"),
+                    healthSyncMessage && React.createElement("div", { className: "text-[11px] text-slate-500 mt-2" }, healthSyncMessage)),
+                React.createElement("div", { className: "grid sm:grid-cols-2 gap-3" },
+                    React.createElement(FieldSlider, { icon: Moon, label: "Horas de sue\u00F1o", unit: "h", value: sleepHours, onChange: setSleepHours, min: 0, max: 12, step: 0.5, color: "#3DDCFF" }),
+                    React.createElement(FieldSlider, { icon: Moon, label: "Calidad de sue\u00F1o", unit: "/10", value: sleepQuality, onChange: setSleepQuality, min: 1, max: 10, step: 1, color: "#3DDCFF" }),
+                    React.createElement(FieldSlider, { icon: Flame, label: "Horas de ayuno", unit: "h", value: fastingHours, onChange: setFastingHours, min: 0, max: 24, step: 0.5, color: "#7FE3A3" }),
+                    React.createElement(FieldSlider, { icon: Flame, label: "Calidad nutricional", unit: "/10", value: nutritionQuality, onChange: setNutritionQuality, min: 1, max: 10, step: 1, color: "#7FE3A3" }),
+                    React.createElement(FieldSlider, { icon: Activity, label: "Minutos de ejercicio", unit: "min", value: exerciseMinutes, onChange: setExerciseMinutes, min: 0, max: 120, step: 5, color: "#FFC857" }),
+                    React.createElement(FieldSlider, { icon: Activity, label: "Intensidad", unit: "/10", value: exerciseIntensity, onChange: setExerciseIntensity, min: 1, max: 10, step: 1, color: "#FFC857" }),
+                    React.createElement(FieldSlider, { icon: Brain, label: "Nivel de estr\u00E9s", unit: "/10", value: stressLevel, onChange: setStressLevel, min: 1, max: 10, step: 1, color: "#C792FF" })),
+                React.createElement("button", { onClick: saveToday, disabled: saving, className: "mt-5 w-full sm:w-auto flex items-center justify-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-6 py-2.5 hover:brightness-110 transition disabled:opacity-50" },
+                    saving ? React.createElement(Loader2, { size: 16, className: "animate-spin" }) : saved ? React.createElement(Check, { size: 16 }) : React.createElement(ChevronRight, { size: 16 }),
+                    saved ? "Guardado" : "Guardar registro de hoy")),
+            activeTab === "entrenamiento" && React.createElement(MyRoutinesSection, { assignments: myRoutineAssignments }),
+            activeTab === "entrenamiento" && isCoach && React.createElement("section", null,
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Panel de coach"),
+                React.createElement(CoachPanel, {
+                    businessName: coachBusinessName,
+                    clients: coachClients,
+                    routines: coachRoutines,
+                    assignments: coachAssignments,
+                    exerciseLibrary: exerciseLibrary,
+                    templates: publicTemplates,
+                    onAddClient: handleAddClient,
+                    addingClient: addingClient,
+                    addClientError: addClientError,
+                    onCreateRoutine: handleCreateRoutine,
+                    creatingRoutine: creatingRoutine,
+                    onAssign: handleAssignRoutine,
+                    assigningRoutineId: assigningRoutineId,
+                    loading: loadingCoachData,
+                })),
+            activeTab === "entrenamiento" && React.createElement("section", null,
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Biblioteca de ejercicios"),
+                React.createElement(ExerciseLibrary, { exercises: exerciseLibrary, loading: loadingExerciseLibrary })),
+            activeTab === "inicio" && React.createElement("section", null,
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Recomendaciones de hoy"),
+                isPremium ? (React.createElement("div", { className: "space-y-3" },
+                    weekly && weekly.deltaPct != null && (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 flex items-center justify-between" },
+                        React.createElement("div", null,
+                            React.createElement("div", { className: "text-sm text-slate-100 font-medium" }, "Esta semana vs la anterior"),
+                            React.createElement("div", { className: "text-xs text-slate-500 mt-0.5" },
+                                "Promedio: ",
+                                Math.round(weekly.thisAvg),
+                                " vs ",
+                                Math.round(weekly.lastAvg))),
+                        React.createElement("div", { className: "font-mono text-lg", style: { color: weekly.deltaPct >= 0 ? "#7FE3A3" : "#FF6B5E" } },
+                            weekly.deltaPct >= 0 ? "▲" : "▼",
+                            " ",
+                            Math.abs(Math.round(weekly.deltaPct)),
+                            "%"))),
+                    recommendations.length === 0 ? (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 text-sm text-slate-500" }, "Completa tu registro de hoy para ver recomendaciones.")) : recommendations.map((r) => (React.createElement("div", { key: r.key, className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 flex gap-4" },
+                        React.createElement("div", { className: "font-mono text-2xl shrink-0 w-12 text-center", style: { color: scoreColor(r.value) } }, Math.round(r.value)),
+                        React.createElement("div", null,
+                            React.createElement("div", { className: "text-sm text-slate-100 font-medium" }, r.title),
+                            React.createElement("div", { className: "text-xs text-slate-400 mt-1 leading-relaxed" }, r.tip))))),
+                    weakestKey && React.createElement(ProtocolCard, { categoryKey: weakestKey }))) : (React.createElement("div", { className: "relative bg-[#11161F] border border-[#1E2535] rounded-2xl p-6 overflow-hidden" },
+                    React.createElement("div", { className: "space-y-3 blur-sm select-none pointer-events-none" },
+                        React.createElement("div", { className: "h-4 w-2/3 bg-[#1E2535] rounded" }),
+                        React.createElement("div", { className: "h-3 w-full bg-[#1E2535] rounded" }),
+                        React.createElement("div", { className: "h-3 w-5/6 bg-[#1E2535] rounded" })),
+                    React.createElement("div", { className: "absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0A0E14]/70" },
+                        React.createElement("span", { className: "text-sm text-slate-200" }, "Recomendaciones personalizadas por categor\u00EDa"),
+                        React.createElement("a", { href: `${STRIPE_PAYMENT_LINK}?client_reference_id=${session.user.id}`, target: "_blank", rel: "noopener noreferrer", className: "text-xs bg-[#3DDCFF] text-[#06121A] font-medium rounded-lg px-4 py-2 hover:brightness-110 transition" }, "Desbloquear con Premium"))))),
+            activeTab === "nutricion" && React.createElement("section", null,
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Nutrici\u00F3n sugerida seg\u00FAn tu objetivo"),
+                nutritionContent),
+            activeTab === "suplementos" && React.createElement("section", null,
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Suplementos sugeridos"),
+                supplementsContent),
+            activeTab === "inicio" && React.createElement("section", null,
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Hist\u00F3rico (\u00FAltimos 60 d\u00EDas)"),
+                React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 h-64" }, loadingEntries ? (React.createElement("div", { className: "h-full flex items-center justify-center text-slate-600" },
+                    React.createElement(Loader2, { size: 20, className: "animate-spin" }))) : chartData.length === 0 ? (React.createElement("div", { className: "h-full flex items-center justify-center text-slate-600 text-sm" }, "A\u00FAn no hay registros. Guarda el de hoy para empezar tu hist\u00F3rico.")) : (React.createElement(SimpleLineChart, { data: chartData })))),
+            activeTab === "metas" && React.createElement("section", { className: "bg-gradient-to-br from-[#11161F] to-[#0A0E14] border border-[#1E2535] rounded-2xl p-5" }, isPremium ? (React.createElement("div", { className: "flex items-center justify-between" },
+                React.createElement("div", null,
+                    React.createElement("div", { className: "text-sm text-slate-200 flex items-center gap-2" },
+                        PREMIUM_SOURCE_LABELS[premiumSource] || "Plan Premium",
+                        " ",
+                        React.createElement(Check, { size: 14, className: "text-[#3DDCFF]" })),
+                    React.createElement("div", { className: "text-xs text-slate-500 mt-0.5" }, premiumSource === "trial" && trialDaysLeft(trialEndsAt) != null
+                        ? `Te quedan ${trialDaysLeft(trialEndsAt)} d\u00EDa(s) de prueba.`
+                        : "Tienes acceso a recomendaciones personalizadas y exportaci\u00F3n de datos.")),
+                React.createElement("button", { onClick: loadPlan, className: "text-xs text-slate-500 hover:text-slate-300 transition" }, "Actualizar estado"))) : (React.createElement("div", { className: "flex flex-col sm:flex-row sm:items-center justify-between gap-4" },
+                React.createElement("div", null,
+                    React.createElement("div", { className: "text-sm text-slate-200" }, "Plan Free"),
+                    React.createElement("div", { className: "text-xs text-slate-500 mt-0.5" }, "Premium ($7.99/mes): recomendaciones por categor\u00EDa, protocolos personalizados y exportaci\u00F3n de datos.")),
+                React.createElement("div", { className: "flex flex-col items-end gap-2 shrink-0" },
+                    React.createElement("a", { href: `${STRIPE_PAYMENT_LINK}?client_reference_id=${session.user.id}`, target: "_blank", rel: "noopener noreferrer", className: "text-center bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-5 py-2.5 hover:brightness-110 transition" }, "Mejorar a Premium"),
+                    React.createElement("button", { onClick: loadPlan, className: "text-[11px] text-slate-500 hover:text-slate-300 transition" }, "Ya pagu\u00E9, actualizar estado"))))))));
+}
+// ---------- Root ----------
+async function refreshSession(refreshToken) {
+    const res = await fetch(`${AUTH}/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    const data = await res.json();
+    if (!res.ok)
+        throw new Error(data.error_description || data.msg || "Sesión expirada.");
+    return { accessToken: data.access_token, refreshToken: data.refresh_token, user: data.user };
+}
+function App() {
+    const [session, setSession] = useState(null);
+    const [restoring, setRestoring] = useState(true);
+    useEffect(() => {
+        (async () => {
+            try {
+                const raw = localStorage.getItem(SESSION_KEY);
+                const saved = raw ? JSON.parse(raw) : null;
+                if (saved === null || saved === void 0 ? void 0 : saved.refreshToken) {
+                    const fresh = await refreshSession(saved.refreshToken);
+                    persistSession(fresh);
+                    setSession(fresh);
+                }
+            }
+            catch (e) {
+                localStorage.removeItem(SESSION_KEY);
+            }
+            finally {
+                setRestoring(false);
+            }
+        })();
+    }, []);
+    function persistSession(s) {
+        try {
+            localStorage.setItem(SESSION_KEY, JSON.stringify({ refreshToken: s.refreshToken }));
+        }
+        catch (e) {
+            console.error("No se pudo guardar la sesión:", e);
+        }
+    }
+    function handleAuthed(s) { persistSession(s); setSession(s); }
+    function handleLogout() { localStorage.removeItem(SESSION_KEY); setSession(null); }
+    return (React.createElement(React.Fragment, null, restoring ? (React.createElement("div", { className: "min-h-screen bg-[#0A0E14] flex items-center justify-center" },
+        React.createElement(Loader2, { size: 22, className: "animate-spin text-[#3DDCFF]" }))) : !session ? (React.createElement(AuthScreen, { onAuthed: handleAuthed })) : (React.createElement(Dashboard, { session: session, onLogout: handleLogout, onRefreshSession: async () => {
+            try {
+                const fresh = await refreshSession(session.refreshToken);
+                persistSession(fresh);
+                setSession(fresh);
+            }
+            catch (e) {
+                console.error("Refresh silencioso falló:", e);
+            }
+        } }))));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App, null));
+
+</script>
+</body>
+</html>

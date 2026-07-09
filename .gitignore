@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Capacitor generated web output / bundled JS
+www/
+native-bridge.js
+
+# Android build artifacts
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/app/release/
+*.apk
+*.aab
+
+# iOS build artifacts (once ios/ is added via `npx cap add ios`)
+ios/App/Pods/
+ios/App/build/
+ios/App/DerivedData/
+ios/App/App/public/
+
+# Credentials, keys, and secrets
+*.keystore
+*.jks
+*.p12
+*.pem
+.env
+.env.*
+google-services.json
+GoogleService-Info.plist
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Claude Code local (machine-specific) settings
+.claude/settings.local.json
