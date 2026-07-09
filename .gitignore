@@ -1,9 +1,9 @@
 # Dependencies
 node_modules/
 
-# Capacitor generated web output / bundled JS
+# Capacitor generated web output / bundled JS (src/native-bridge.js is the source, keep it tracked)
 www/
-native-bridge.js
+/native-bridge.js
 
 # Android build artifacts
 android/app/build/
