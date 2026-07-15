@@ -5,10 +5,16 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const STRIPE_WEBHOOK_SECRET = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
 
-// Individual plan: $7.99/mo, price_1To7SuLb3yxBeQwgnfiEuRZF (existing Payment Link, unchanged).
-// Coach plan: $20/mo flat, up to 25 clients, price_1TrTmVLb3yxBeQwgrgwMvW66 (new Payment Link).
+// Coach plan: $20/mo flat, up to 25 clients, price_1TrTmVLb3yxBeQwgrgwMvW66 (existing Payment Link).
 const COACH_PRICE_ID = "price_1TrTmVLb3yxBeQwgrgwMvW66";
 const COACH_PRICE_CENTS = 2000;
+
+// Client plans replace the old single $7.99/mo individual plan (never had paying
+// customers, safe to retire outright). These cents amounts must stay in sync with
+// subscription_plans.price_usd — checkout.session.completed doesn't carry price/line-item
+// info without an extra Stripe API call (same tradeoff already accepted for the coach
+// plan above), so tier is matched by exact charged amount, same as the coach detection.
+const TIER_AMOUNTS_CENTS: Record<string, number> = { basico: 999, pro: 1399, elite: 1999 };
 
 async function verifyStripeSignature(rawBody: string, sigHeader: string, secret: string) {
   const parts = Object.fromEntries(
@@ -103,6 +109,20 @@ async function updateCoach(
   }
 }
 
+async function tierForPriceId(priceId: string): Promise<string | null> {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/subscription_plans?stripe_price_id=eq.${priceId}&select=tier`,
+    {
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      },
+    }
+  );
+  const rows = await res.json();
+  return Array.isArray(rows) && rows[0] ? rows[0].tier : null;
+}
+
 function mapStripeStatusToCoachStatus(stripeStatus: string): "active" | "past_due" | "canceled" | null {
   if (stripeStatus === "active" || stripeStatus === "trialing") return "active";
   if (stripeStatus === "past_due") return "past_due";
@@ -136,10 +156,13 @@ Deno.serve(async (req: Request) => {
         const subscriptionId = session.subscription;
 
         // Checkout Sessions don't carry price/line-item info by default (no extra Stripe
-        // API call is wired up in this function), so the coach vs. individual plan is
-        // distinguished by the fixed checkout amount. Both Payment Links disallow promo
+        // API call is wired up in this function), so which plan was bought is
+        // distinguished by the fixed checkout amount. All Payment Links disallow promo
         // codes and have no automatic tax, so amount_total reliably equals the price.
         const isCoachPayment = session.amount_total === COACH_PRICE_CENTS;
+        const matchedTier = Object.entries(TIER_AMOUNTS_CENTS).find(
+          ([, cents]) => cents === session.amount_total
+        )?.[0];
 
         if (isCoachPayment) {
           if (userId) {
@@ -155,16 +178,23 @@ Deno.serve(async (req: Request) => {
               "checkout.session.completed"
             );
           }
+        } else if (matchedTier && userId) {
+          // Client plan (básico/pro/elite) — sets premium_source = 'paid' so is_premium()
+          // actually unlocks access; the old code only set the legacy `plan` display
+          // column here, which meant a real paying customer never got premium (never hit
+          // production since nobody had completed this checkout yet).
+          await updateProfile("id", userId, {
+            plan: "premium",
+            premium_source: "paid",
+            subscription_tier: matchedTier,
+            stripe_customer_id: customerId,
+            stripe_subscription_id: subscriptionId,
+            premium_since: new Date().toISOString(),
+          });
         } else {
-          // Individual plan — existing logic, unchanged.
-          if (userId) {
-            await updateProfile("id", userId, {
-              plan: "premium",
-              stripe_customer_id: customerId,
-              stripe_subscription_id: subscriptionId,
-              premium_since: new Date().toISOString(),
-            });
-          }
+          console.error(
+            `checkout.session.completed: amount_total ${session.amount_total} matched no known plan (coach=${COACH_PRICE_CENTS}, client tiers=${JSON.stringify(TIER_AMOUNTS_CENTS)}).`
+          );
         }
         break;
       }
@@ -183,11 +213,17 @@ Deno.serve(async (req: Request) => {
             );
           }
         } else {
-          // Individual plan — existing logic, unchanged.
+          const tier = priceId ? await tierForPriceId(priceId) : null;
           const isActive = ["active", "trialing"].includes(sub.status);
-          await updateProfile("stripe_customer_id", sub.customer, {
-            plan: isActive ? "premium" : "free",
-          });
+          if (tier) {
+            await updateProfile("stripe_customer_id", sub.customer, isActive
+              ? { plan: "premium", premium_source: "paid", subscription_tier: tier }
+              : { plan: "free", premium_source: null });
+          } else {
+            console.error(
+              `customer.subscription.updated: price ${priceId} matched no coach or client plan for customer ${sub.customer}.`
+            );
+          }
         }
         break;
       }
@@ -203,8 +239,7 @@ Deno.serve(async (req: Request) => {
             "customer.subscription.deleted"
           );
         } else {
-          // Individual plan — existing logic, unchanged.
-          await updateProfile("stripe_customer_id", sub.customer, { plan: "free" });
+          await updateProfile("stripe_customer_id", sub.customer, { plan: "free", premium_source: null });
         }
         break;
       }

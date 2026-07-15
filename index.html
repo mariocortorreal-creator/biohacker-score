@@ -85,6 +85,11 @@ const AlertCircle = (p) => React.createElement(Icon, { ...p },
     React.createElement("circle", { cx: "12", cy: "12", r: "10" }),
     React.createElement("line", { x1: "12", y1: "8", x2: "12", y2: "12" }),
     React.createElement("line", { x1: "12", y1: "16", x2: "12.01", y2: "16" }));
+const Trash2 = (p) => React.createElement(Icon, { ...p },
+    React.createElement("polyline", { points: "3 6 5 6 21 6" }),
+    React.createElement("path", { d: "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" }),
+    React.createElement("line", { x1: "10", y1: "11", x2: "10", y2: "17" }),
+    React.createElement("line", { x1: "14", y1: "11", x2: "14", y2: "17" }));
 // ---------- Scoring engine ----------
 function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
 const DEFAULT_GOALS = { sleepHours: 8, fastingHours: 16, exerciseMinutes: 45, stressMax: 3 };
@@ -432,6 +437,119 @@ function MacroCalculatorCard({ weightDraft, onWeightChange, onSave, saving, macr
         results,
         emptyState);
 }
+// ---------- Diet generator (Nutrición tab, premium) ----------
+const ACTIVITY_LEVEL_LABELS = { sedentario: "Sedentario", ligero: "Ligero (1-3 días/sem)", moderado: "Moderado (3-5 días/sem)", activo: "Activo (6-7 días/sem)", muy_activo: "Muy activo (2x/día)" };
+const NUTRITION_GOAL_LABELS = { cut: "Bajar grasa", bulk: "Ganar músculo", maintain: "Mantener" };
+const DIET_ERROR_MESSAGES = {
+    not_premium: "Nutrición es una función premium.",
+    anthropic_key_missing: "El generador de dietas no está configurado todavía. Contacta a soporte.",
+    missing_calculator_inputs: "Completa edad, altura, nivel de actividad, objetivo y tu composición corporal arriba para generar tu dieta.",
+    profile_not_found: "No se encontró tu perfil.",
+    generation_failed: "No se pudo generar tu dieta, intenta de nuevo en un momento.",
+    invalid_generation_output: "No se pudo generar tu dieta, intenta de nuevo en un momento.",
+    unauthorized: "Tu sesión expiró, vuelve a iniciar sesión.",
+    internal_error: "No se pudo generar tu dieta.",
+};
+function resolveClientTier(premiumSource, subscriptionTier) {
+    if (subscriptionTier)
+        return subscriptionTier;
+    if (premiumSource === "comp_trainer")
+        return "elite";
+    return "basico";
+}
+function dietInputsSnapshot(profileValues, exclusions) {
+    return {
+        weight_kg: profileValues.weight_kg,
+        height_cm: profileValues.height_cm,
+        age: profileValues.age,
+        body_gender: profileValues.body_gender,
+        activity_level: profileValues.activity_level,
+        nutrition_goal: profileValues.nutrition_goal,
+        exclusions: [...exclusions].map((e) => ({ food_name: e.food_name, reason: e.reason })).sort((a, b) => a.food_name.localeCompare(b.food_name)),
+    };
+}
+function DietGeneratorCard(props) {
+    const { profileDraft, onProfileDraftChange, onSaveProfile, savingProfile, exclusions, newExclusionName, setNewExclusionName, newExclusionReason, setNewExclusionReason, onAddExclusion, addingExclusion, onRemoveExclusion, removingExclusionId, dietPlans, currentTier, planInfo, tierDisplayNames, usedThisMonth, quota, inputsComplete, inputsChanged, generating, dietError, dietQuotaInfo, onGenerate, } = props;
+    const latestPlan = dietPlans[0] || null;
+    const profileForm = React.createElement("div", { className: "grid sm:grid-cols-2 gap-3" },
+        React.createElement("label", null,
+            React.createElement("div", { className: "text-xs text-slate-400 mb-1" }, "Edad"),
+            React.createElement("input", { type: "number", min: "1", value: profileDraft.age, onChange: (e) => onProfileDraftChange({ ...profileDraft, age: e.target.value }), className: "w-full bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
+        React.createElement("label", null,
+            React.createElement("div", { className: "text-xs text-slate-400 mb-1" }, "Altura (cm)"),
+            React.createElement("input", { type: "number", min: "1", value: profileDraft.height_cm, onChange: (e) => onProfileDraftChange({ ...profileDraft, height_cm: e.target.value }), className: "w-full bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
+        React.createElement("label", null,
+            React.createElement("div", { className: "text-xs text-slate-400 mb-1" }, "Nivel de actividad"),
+            React.createElement("select", { value: profileDraft.activity_level, onChange: (e) => onProfileDraftChange({ ...profileDraft, activity_level: e.target.value }), className: "w-full bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" },
+                React.createElement("option", { value: "" }, "Elige uno"),
+                Object.keys(ACTIVITY_LEVEL_LABELS).map((k) => React.createElement("option", { key: k, value: k }, ACTIVITY_LEVEL_LABELS[k])))),
+        React.createElement("label", null,
+            React.createElement("div", { className: "text-xs text-slate-400 mb-1" }, "Objetivo"),
+            React.createElement("select", { value: profileDraft.nutrition_goal, onChange: (e) => onProfileDraftChange({ ...profileDraft, nutrition_goal: e.target.value }), className: "w-full bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" },
+                React.createElement("option", { value: "" }, "Elige uno"),
+                Object.keys(NUTRITION_GOAL_LABELS).map((k) => React.createElement("option", { key: k, value: k }, NUTRITION_GOAL_LABELS[k])))));
+    const exclusionChips = exclusions.length === 0
+        ? React.createElement("div", { className: "text-xs text-slate-500" }, "Sin alimentos excluidos todavía.")
+        : React.createElement("div", { className: "flex flex-wrap gap-2" }, exclusions.map((ex) => React.createElement("span", { key: ex.id, className: `flex items-center gap-1.5 text-xs rounded-lg px-2.5 py-1 border ${ex.reason === "allergy" ? "border-[#FF6B5E]/40 text-[#FF6B5E]" : "border-[#1E2535] text-slate-300"}` },
+            ex.food_name,
+            ex.reason === "allergy" ? " (alergia)" : "",
+            React.createElement("button", { type: "button", onClick: () => onRemoveExclusion(ex.id), disabled: removingExclusionId === ex.id, className: "hover:brightness-125 transition" }, "✕"))));
+    const exclusionForm = React.createElement("div", { className: "flex gap-2 mt-3" },
+        React.createElement("input", { type: "text", value: newExclusionName, onChange: (e) => setNewExclusionName(e.target.value), placeholder: "ej. mariscos", className: "flex-1 bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" }),
+        React.createElement("select", { value: newExclusionReason, onChange: (e) => setNewExclusionReason(e.target.value), className: "bg-[#0A0E14] border border-[#1E2535] rounded-lg px-2 py-2 text-slate-100 text-xs outline-none focus:border-[#3DDCFF]" },
+            React.createElement("option", { value: "dislike" }, "No le gusta"),
+            React.createElement("option", { value: "allergy" }, "Alergia")),
+        React.createElement("button", { type: "button", onClick: onAddExclusion, disabled: addingExclusion || !newExclusionName.trim(), className: "shrink-0 bg-[#3DDCFF] text-[#06121A] font-medium text-xs rounded-lg px-3 py-2 hover:brightness-110 transition disabled:opacity-40" }, addingExclusion ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : "Agregar"));
+    let generateAction;
+    if (dietQuotaInfo && dietQuotaInfo.quota_exceeded) {
+        generateAction = React.createElement("div", { className: "bg-[#FFC857]/10 border border-[#FFC857]/25 rounded-lg px-3 py-2.5 text-xs text-[#FFC857]" }, dietQuotaInfo.next_tier
+            ? `Ya usaste tus ${quota} dietas de este mes en ${planInfo ? planInfo.display_name : currentTier}. Sube a ${dietQuotaInfo.next_tier_display_name || (tierDisplayNames && tierDisplayNames[dietQuotaInfo.next_tier]) || dietQuotaInfo.next_tier} ($${dietQuotaInfo.next_tier_price}/mes) para generar 1 dieta más este mes.`
+            : `Ya usaste tus ${quota} dietas de este mes en Plan Elite. El próximo reinicio de cuota es el día 1 del próximo mes.`);
+    }
+    else if (!inputsComplete) {
+        generateAction = React.createElement("div", { className: "text-xs text-slate-500" }, "Completa edad, altura, nivel de actividad, objetivo y tu composición corporal arriba para generar tu dieta.");
+    }
+    else if (!inputsChanged) {
+        generateAction = React.createElement("div", { className: "text-xs text-slate-500" }, "No hay cambios que actualizar desde tu última dieta generada.");
+    }
+    else {
+        generateAction = React.createElement("button", { type: "button", onClick: onGenerate, disabled: generating, className: "flex items-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-5 py-2.5 hover:brightness-110 transition disabled:opacity-50" },
+            generating ? React.createElement(Loader2, { size: 16, className: "animate-spin" }) : React.createElement(ChevronRight, { size: 16 }),
+            "Actualizar mi dieta");
+    }
+    function renderMealCard(key, label, mealObj) {
+        if (!mealObj)
+            return null;
+        return React.createElement("div", { key: key },
+            React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-[#3DDCFF] mb-1" }, label),
+            mealObj.nombre && React.createElement("div", { className: "text-xs text-slate-200 font-medium mb-1" }, mealObj.nombre),
+            React.createElement("ul", { className: "text-xs text-slate-300 list-disc list-inside space-y-0.5" }, (mealObj.alimentos || []).map((a, i) => React.createElement("li", { key: i }, a.porcion ? `${a.item} — ${a.porcion}` : a.item))),
+            mealObj.calorias != null && React.createElement("div", { className: "text-[11px] text-slate-500 mt-1" }, `${mealObj.calorias} kcal · P ${mealObj.proteina_g}g · C ${mealObj.carbos_g}g · G ${mealObj.grasa_g}g`));
+    }
+    const mealPlanBlock = latestPlan && React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 space-y-3" },
+        React.createElement("div", { className: "grid grid-cols-4 gap-2 text-center pb-3 border-b border-[#1E2535]" },
+            React.createElement("div", null, React.createElement("div", { className: "font-mono text-sm text-slate-100" }, latestPlan.calorie_target), React.createElement("div", { className: "text-[9px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Kcal")),
+            React.createElement("div", null, React.createElement("div", { className: "font-mono text-sm", style: { color: "#7FE3A3" } }, latestPlan.protein_g, "g"), React.createElement("div", { className: "text-[9px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Proteína")),
+            React.createElement("div", null, React.createElement("div", { className: "font-mono text-sm", style: { color: "#3DDCFF" } }, latestPlan.carbs_g, "g"), React.createElement("div", { className: "text-[9px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Carbos")),
+            React.createElement("div", null, React.createElement("div", { className: "font-mono text-sm", style: { color: "#FFC857" } }, latestPlan.fat_g, "g"), React.createElement("div", { className: "text-[9px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Grasa"))),
+        renderMealCard("desayuno", "Desayuno", latestPlan.meal_plan && latestPlan.meal_plan.desayuno),
+        renderMealCard("almuerzo", "Almuerzo", latestPlan.meal_plan && latestPlan.meal_plan.almuerzo),
+        renderMealCard("cena", "Cena", latestPlan.meal_plan && latestPlan.meal_plan.cena),
+        Array.isArray(latestPlan.meal_plan && latestPlan.meal_plan.snacks) && latestPlan.meal_plan.snacks.map((s, i) => renderMealCard(`snack-${i}`, latestPlan.meal_plan.snacks.length > 1 ? `Snack ${i + 1}` : "Snack", s)));
+    return React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 space-y-5" },
+        React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-[#3DDCFF]" }, "Generador de dietas (IA)"),
+        profileForm,
+        React.createElement("button", { type: "button", onClick: () => onSaveProfile({ age: profileDraft.age ? parseInt(profileDraft.age, 10) : null, height_cm: profileDraft.height_cm ? parseFloat(profileDraft.height_cm) : null, activity_level: profileDraft.activity_level || null, nutrition_goal: profileDraft.nutrition_goal || null }), disabled: savingProfile, className: "flex items-center gap-2 bg-transparent border border-[#3DDCFF]/40 text-[#3DDCFF] text-xs rounded-lg px-3 py-1.5 hover:bg-[#3DDCFF]/10 transition disabled:opacity-40" }, savingProfile ? React.createElement(Loader2, { size: 12, className: "animate-spin" }) : React.createElement(Check, { size: 12 }), "Guardar datos"),
+        React.createElement("div", null,
+            React.createElement("div", { className: "text-xs text-slate-400 mb-2" }, "Alimentos que no consumo / alergias"),
+            exclusionChips,
+            exclusionForm),
+        React.createElement("div", { className: "flex items-center justify-between text-xs text-slate-400 border-t border-[#1E2535] pt-3" },
+            React.createElement("span", null, `${usedThisMonth} de ${quota} dietas usadas este mes (${planInfo ? planInfo.display_name : currentTier})`)),
+        dietError && React.createElement("div", { className: "flex items-start gap-2 text-[#FF6B5E] text-xs bg-[#FF6B5E]/10 border border-[#FF6B5E]/20 rounded-lg px-3 py-2" }, React.createElement(AlertCircle, { size: 14, className: "mt-0.5 shrink-0" }), " ", dietError),
+        generateAction,
+        mealPlanBlock);
+}
 // ---------- Auth screen ----------
 function ProtocolCard({ categoryKey }) {
     const [open, setOpen] = useState(false);
@@ -451,15 +569,21 @@ function ProtocolCard({ categoryKey }) {
             React.createElement("span", null, d))))))));
 }
 function AuthScreen({ onAuthed }) {
-    const [mode, setMode] = useState("login");
+    const startInSignup = typeof window !== "undefined" && window.location.pathname.replace(/\/+$/, "") === "/registro";
+    const [mode, setMode] = useState(startInSignup ? "signup" : "login");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [info, setInfo] = useState("");
     async function submit() {
         if (!email || !password) {
             setError("Completa correo y contraseña.");
+            return;
+        }
+        if (mode === "signup" && password !== confirmPassword) {
+            setError("Las contraseñas no coinciden.");
             return;
         }
         setError("");
@@ -484,8 +608,14 @@ function AuthScreen({ onAuthed }) {
                     body: JSON.stringify({ email, password }),
                 });
                 const data = await res.json();
-                if (!res.ok)
-                    throw new Error(data.error_description || data.msg || "No se pudo crear la cuenta.");
+                if (!res.ok) {
+                    const msg = data.error_description || data.msg || "";
+                    if (/already registered|already exists|user_already_exists/i.test(msg))
+                        throw new Error("Ese correo ya tiene una cuenta. Inicia sesión en su lugar.");
+                    if (/password/i.test(msg) && /short|weak|least/i.test(msg))
+                        throw new Error("La contraseña es muy débil (mínimo 6 caracteres).");
+                    throw new Error(msg || "No se pudo crear la cuenta.");
+                }
                 if (data.access_token) {
                     onAuthed({ accessToken: data.access_token, refreshToken: data.refresh_token, user: data.user });
                 }
@@ -515,8 +645,12 @@ function AuthScreen({ onAuthed }) {
                     React.createElement("input", { type: "email", value: email, onChange: (e) => setEmail(e.target.value), className: "w-full mt-1 bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF] transition-colors", placeholder: "tu@correo.com" })),
                 React.createElement("div", null,
                     React.createElement("label", { className: "text-xs uppercase tracking-wider text-slate-500" }, "Contrase\u00F1a"),
-                    React.createElement("input", { type: "password", minLength: 6, value: password, onChange: (e) => setPassword(e.target.value), onKeyDown: (e) => { if (e.key === "Enter")
+                    React.createElement("input", { type: "password", minLength: 6, value: password, onChange: (e) => setPassword(e.target.value), onKeyDown: (e) => { if (e.key === "Enter" && mode === "login")
                             submit(); }, className: "w-full mt-1 bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF] transition-colors", placeholder: "m\u00EDnimo 6 caracteres" })),
+                mode === "signup" && (React.createElement("div", null,
+                    React.createElement("label", { className: "text-xs uppercase tracking-wider text-slate-500" }, "Confirmar contrase\u00F1a"),
+                    React.createElement("input", { type: "password", minLength: 6, value: confirmPassword, onChange: (e) => setConfirmPassword(e.target.value), onKeyDown: (e) => { if (e.key === "Enter")
+                            submit(); }, className: "w-full mt-1 bg-[#0A0E14] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF] transition-colors", placeholder: "repite tu contrase\u00F1a" }))),
                 error && (React.createElement("div", { className: "flex items-start gap-2 text-[#FF6B5E] text-xs bg-[#FF6B5E]/10 border border-[#FF6B5E]/20 rounded-lg px-3 py-2" },
                     React.createElement(AlertCircle, { size: 14, className: "mt-0.5 shrink-0" }),
                     " ",
@@ -526,7 +660,7 @@ function AuthScreen({ onAuthed }) {
                     " ",
                     info)),
                 React.createElement("button", { type: "button", onClick: submit, disabled: loading, className: "w-full flex items-center justify-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg py-2.5 hover:brightness-110 transition disabled:opacity-50" }, loading ? React.createElement(Loader2, { size: 16, className: "animate-spin" }) : mode === "login" ? "Entrar" : "Crear cuenta")),
-            React.createElement("button", { onClick: () => { setMode(mode === "login" ? "signup" : "login"); setError(""); setInfo(""); }, className: "w-full text-center text-xs text-slate-500 mt-4 hover:text-slate-300 transition" }, mode === "login" ? "¿No tienes cuenta? Crea una" : "¿Ya tienes cuenta? Inicia sesión"))));
+            React.createElement("button", { onClick: () => { setMode(mode === "login" ? "signup" : "login"); setError(""); setInfo(""); setConfirmPassword(""); }, className: "w-full text-center text-xs text-slate-500 mt-4 hover:text-slate-300 transition" }, mode === "login" ? "¿No tienes cuenta? Crea una" : "¿Ya tienes cuenta? Inicia sesión"))));
 }
 function BodyImageButton({ item, selected, onClick, accent }) {
     return (React.createElement("button", { onClick: onClick, type: "button", className: `relative rounded-2xl overflow-hidden border-2 transition ${selected ? "" : "border-[#1E2535] opacity-70 hover:opacity-100"}`, style: selected ? { borderColor: accent, boxShadow: `0 0 0 1px ${accent}` } : {} },
@@ -702,8 +836,9 @@ function RoutineBuilder({ exerciseLibrary, templates, onCreate, creating }) {
             creating ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : React.createElement(Check, { size: 14 }),
             "Guardar rutina"));
 }
-function RoutineCard({ routine, clients, assignedClientIds, onAssign, assigning }) {
+function RoutineCard({ routine, clients, assignedClientIds, onAssign, assigning, onDelete, deleting }) {
     const [selectedClient, setSelectedClient] = useState("");
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
     const exercises = Array.isArray(routine.content) ? routine.content : [];
     const assignedNames = clients.filter((c) => assignedClientIds.indexOf(c.client_id) !== -1).map((c) => c.full_name || c.email);
     async function handleAssign() {
@@ -712,7 +847,13 @@ function RoutineCard({ routine, clients, assignedClientIds, onAssign, assigning 
         if (ok) setSelectedClient("");
     }
     return React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
-        React.createElement("div", { className: "text-sm text-slate-100 font-medium" }, routine.title),
+        React.createElement("div", { className: "flex items-start justify-between gap-2" },
+            React.createElement("div", { className: "text-sm text-slate-100 font-medium" }, routine.title),
+            confirmingDelete
+                ? React.createElement("div", { className: "flex items-center gap-1.5 shrink-0" },
+                    React.createElement("button", { type: "button", onClick: () => onDelete(routine.id), disabled: deleting, className: "text-[11px] text-[#FF6B5E] hover:brightness-125 transition disabled:opacity-40" }, deleting ? React.createElement(Loader2, { size: 12, className: "animate-spin" }) : "Confirmar"),
+                    React.createElement("button", { type: "button", onClick: () => setConfirmingDelete(false), disabled: deleting, className: "text-[11px] text-slate-500 hover:text-slate-300 transition" }, "Cancelar"))
+                : React.createElement("button", { type: "button", onClick: () => setConfirmingDelete(true), className: "text-slate-500 hover:text-[#FF6B5E] transition shrink-0", title: "Eliminar rutina" }, React.createElement(Trash2, { size: 14 }))),
         routine.description && React.createElement("div", { className: "text-xs text-slate-500 mt-0.5" }, routine.description),
         React.createElement("ul", { className: "mt-3 space-y-1" }, exercises.map((ex, i) => React.createElement("li", { key: i, className: "text-xs text-slate-400" }, React.createElement("span", { className: "text-slate-200" }, ex.exercise), ` \u2014 ${ex.sets}x${ex.reps}`, ex.rest_seconds ? `, ${ex.rest_seconds}s descanso` : ""))),
         assignedNames.length > 0 && React.createElement("div", { className: "text-[11px] text-[#7FE3A3] mt-3" }, "Asignada a: ", assignedNames.join(", ")),
@@ -746,6 +887,8 @@ function CoachPanel(props) {
         assignedClientIds: props.assignments.filter((a) => a.routine_id === r.id).map((a) => a.client_id),
         onAssign: props.onAssign,
         assigning: props.assigningRoutineId === r.id,
+        onDelete: props.onDelete,
+        deleting: props.deletingRoutineId === r.id,
     }));
     return React.createElement("div", { className: "space-y-6" },
         React.createElement("div", { className: "text-sm text-slate-400" }, props.businessName || "Tu panel de coach"),
@@ -813,6 +956,21 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     const [nutritionRecs, setNutritionRecs] = useState([]);
     const [supplementRecs, setSupplementRecs] = useState([]);
     const [loadingPremiumContent, setLoadingPremiumContent] = useState(false);
+    const [dietProfileDraft, setDietProfileDraft] = useState({ age: "", height_cm: "", activity_level: "", nutrition_goal: "" });
+    const [savingDietProfile, setSavingDietProfile] = useState(false);
+    const [foodExclusions, setFoodExclusions] = useState([]);
+    const [loadingExclusions, setLoadingExclusions] = useState(false);
+    const [newExclusionName, setNewExclusionName] = useState("");
+    const [newExclusionReason, setNewExclusionReason] = useState("dislike");
+    const [addingExclusion, setAddingExclusion] = useState(false);
+    const [removingExclusionId, setRemovingExclusionId] = useState(null);
+    const [dietPlans, setDietPlans] = useState([]);
+    const [subscriptionPlans, setSubscriptionPlans] = useState([]);
+    const [subscriptionTier, setSubscriptionTier] = useState(null);
+    const [loadingDietData, setLoadingDietData] = useState(false);
+    const [generatingDiet, setGeneratingDiet] = useState(false);
+    const [dietError, setDietError] = useState("");
+    const [dietQuotaInfo, setDietQuotaInfo] = useState(null);
     const [isCoach, setIsCoach] = useState(false);
     const [coachBusinessName, setCoachBusinessName] = useState(null);
     const [coachClients, setCoachClients] = useState([]);
@@ -826,18 +984,21 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     const [addClientError, setAddClientError] = useState("");
     const [creatingRoutine, setCreatingRoutine] = useState(false);
     const [assigningRoutineId, setAssigningRoutineId] = useState(null);
+    const [deletingRoutineId, setDeletingRoutineId] = useState(null);
     const [myRoutineAssignments, setMyRoutineAssignments] = useState([]);
     const [activeTab, setActiveTab] = useState("inicio");
     const [healthSyncing, setHealthSyncing] = useState(false);
     const [healthSyncMessage, setHealthSyncMessage] = useState("");
     const authHeaders = { apikey: ANON_KEY, Authorization: `Bearer ${session.accessToken}`, "Content-Type": "application/json" };
-    useEffect(() => { loadEntries(); loadPlan(); checkCoachStatus(); loadMyRoutineAssignments(); loadExerciseLibrary(); }, []);
+    useEffect(() => { loadEntries(); loadPlan(); checkCoachStatus(); loadMyRoutineAssignments(); loadExerciseLibrary(); loadSupplements(); }, []);
     useEffect(() => {
         const id = setInterval(() => onRefreshSession === null || onRefreshSession === void 0 ? void 0 : onRefreshSession(), 45 * 60 * 1000);
         return () => clearInterval(id);
     }, [onRefreshSession]);
-    useEffect(() => { if (isPremium)
-        loadPremiumContent(); }, [isPremium]);
+    useEffect(() => { if (isPremium) {
+        loadPremiumContent();
+        loadDietData();
+    } }, [isPremium]);
     useEffect(() => { if (isCoach)
         loadCoachData(); }, [isCoach]);
     async function checkCoachStatus() {
@@ -966,14 +1127,41 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             setAssigningRoutineId(null);
         }
     }
+    async function handleDeleteRoutine(routineId) {
+        setDeletingRoutineId(routineId);
+        try {
+            const res = await fetch(`${REST}/routines?id=eq.${routineId}`, {
+                method: "DELETE",
+                headers: authHeaders,
+            });
+            if (!res.ok)
+                throw new Error("No se pudo eliminar la rutina.");
+            await loadCoachData();
+            return true;
+        }
+        catch (e) {
+            console.error(e);
+            return false;
+        }
+        finally {
+            setDeletingRoutineId(null);
+        }
+    }
     async function loadPlan() {
         setCheckingPlan(true);
         try {
-            const res = await fetch(`${REST}/profiles?id=eq.${session.user.id}&select=goal_sleep_hours,goal_fasting_hours,goal_exercise_minutes,goal_stress_max,body_gender,body_current_stage,body_target_stage,weight_kg,premium_source,trial_ends_at`, { headers: authHeaders });
+            const res = await fetch(`${REST}/profiles?id=eq.${session.user.id}&select=goal_sleep_hours,goal_fasting_hours,goal_exercise_minutes,goal_stress_max,body_gender,body_current_stage,body_target_stage,weight_kg,premium_source,trial_ends_at,age,height_cm,activity_level,nutrition_goal,subscription_tier`, { headers: authHeaders });
             const data = await res.json();
             if (Array.isArray(data) && data[0]) {
                 setPremiumSource(data[0].premium_source || null);
                 setTrialEndsAt(data[0].trial_ends_at || null);
+                setSubscriptionTier(data[0].subscription_tier || null);
+                setDietProfileDraft({
+                    age: data[0].age != null ? String(data[0].age) : "",
+                    height_cm: data[0].height_cm != null ? String(data[0].height_cm) : "",
+                    activity_level: data[0].activity_level || "",
+                    nutrition_goal: data[0].nutrition_goal || "",
+                });
                 const g = {
                     sleepHours: Number(data[0].goal_sleep_hours) || DEFAULT_GOALS.sleepHours,
                     fastingHours: Number(data[0].goal_fasting_hours) || DEFAULT_GOALS.fastingHours,
@@ -1011,22 +1199,146 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             setCheckingPlan(false);
         }
     }
+    async function loadSupplements() {
+        // Suplementos is fully open (free, trial, any plan) — loaded unconditionally,
+        // independent of isPremium, unlike loadPremiumContent below.
+        try {
+            const res = await fetch(`${REST}/supplement_recommendations?select=*&order=display_order.asc`, { headers: authHeaders });
+            const data = await res.json();
+            setSupplementRecs(Array.isArray(data) ? data : []);
+        }
+        catch (e) {
+            console.error(e);
+        }
+    }
     async function loadPremiumContent() {
         setLoadingPremiumContent(true);
         try {
-            const [suppRes, nutriRes] = await Promise.all([
-                fetch(`${REST}/supplement_recommendations?select=*&order=display_order.asc`, { headers: authHeaders }),
-                fetch(`${REST}/nutrition_recommendations?select=*&order=display_order.asc`, { headers: authHeaders }),
-            ]);
-            const [suppData, nutriData] = await Promise.all([suppRes.json(), nutriRes.json()]);
-            setSupplementRecs(Array.isArray(suppData) ? suppData : []);
-            setNutritionRecs(Array.isArray(nutriData) ? nutriData : []);
+            const res = await fetch(`${REST}/nutrition_recommendations?select=*&order=display_order.asc`, { headers: authHeaders });
+            const data = await res.json();
+            setNutritionRecs(Array.isArray(data) ? data : []);
         }
         catch (e) {
             console.error(e);
         }
         finally {
             setLoadingPremiumContent(false);
+        }
+    }
+    async function loadDietData() {
+        setLoadingDietData(true);
+        try {
+            const [exclRes, dietsRes, plansRes] = await Promise.all([
+                fetch(`${REST}/client_food_exclusions?client_id=eq.${session.user.id}&select=*&order=created_at.asc`, { headers: authHeaders }),
+                fetch(`${REST}/diet_plans?client_id=eq.${session.user.id}&select=*&order=generated_at.desc`, { headers: authHeaders }),
+                fetch(`${REST}/subscription_plans?select=*`, { headers: authHeaders }),
+            ]);
+            const [exclData, dietsData, plansData] = await Promise.all([exclRes.json(), dietsRes.json(), plansRes.json()]);
+            setFoodExclusions(Array.isArray(exclData) ? exclData : []);
+            setDietPlans(Array.isArray(dietsData) ? dietsData : []);
+            setSubscriptionPlans(Array.isArray(plansData) ? plansData : []);
+        }
+        catch (e) {
+            console.error(e);
+        }
+        finally {
+            setLoadingDietData(false);
+        }
+    }
+    async function saveDietProfile(patch) {
+        setSavingDietProfile(true);
+        try {
+            const res = await fetch(`${REST}/profiles?id=eq.${session.user.id}`, {
+                method: "PATCH",
+                headers: { ...authHeaders, Prefer: "return=minimal" },
+                body: JSON.stringify(patch),
+            });
+            if (!res.ok)
+                throw new Error("No se pudo guardar.");
+            setDietProfileDraft({ ...dietProfileDraft, ...patch, age: patch.age !== undefined ? String(patch.age) : dietProfileDraft.age, height_cm: patch.height_cm !== undefined ? String(patch.height_cm) : dietProfileDraft.height_cm });
+        }
+        catch (e) {
+            console.error(e);
+        }
+        finally {
+            setSavingDietProfile(false);
+        }
+    }
+    async function addFoodExclusion() {
+        if (!newExclusionName.trim())
+            return;
+        setAddingExclusion(true);
+        try {
+            const res = await fetch(`${REST}/client_food_exclusions`, {
+                method: "POST",
+                headers: { ...authHeaders, Prefer: "return=representation" },
+                body: JSON.stringify({ client_id: session.user.id, food_name: newExclusionName.trim(), reason: newExclusionReason }),
+            });
+            if (!res.ok)
+                throw new Error("No se pudo agregar.");
+            const [created] = await res.json();
+            setFoodExclusions([...foodExclusions, created]);
+            setNewExclusionName("");
+        }
+        catch (e) {
+            console.error(e);
+        }
+        finally {
+            setAddingExclusion(false);
+        }
+    }
+    async function removeFoodExclusion(id) {
+        setRemovingExclusionId(id);
+        try {
+            const res = await fetch(`${REST}/client_food_exclusions?id=eq.${id}`, {
+                method: "DELETE",
+                headers: authHeaders,
+            });
+            if (!res.ok)
+                throw new Error("No se pudo quitar.");
+            setFoodExclusions(foodExclusions.filter((f) => f.id !== id));
+        }
+        catch (e) {
+            console.error(e);
+        }
+        finally {
+            setRemovingExclusionId(null);
+        }
+    }
+    async function generateDiet() {
+        setGeneratingDiet(true);
+        setDietError("");
+        setDietQuotaInfo(null);
+        try {
+            // Persist the calculator inputs first — otherwise, if the user never
+            // separately clicked "Guardar datos", the edge function would read stale
+            // profile values and the typed inputs would be lost on the next page load.
+            await saveDietProfile({
+                age: dietProfileDraft.age ? parseInt(dietProfileDraft.age, 10) : null,
+                height_cm: dietProfileDraft.height_cm ? parseFloat(dietProfileDraft.height_cm) : null,
+                activity_level: dietProfileDraft.activity_level || null,
+                nutrition_goal: dietProfileDraft.nutrition_goal || null,
+            });
+            const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-diet-plan`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${session.accessToken}`, "Content-Type": "application/json" },
+            });
+            const data = await res.json();
+            if (data.quota_exceeded) {
+                setDietQuotaInfo(data);
+                return;
+            }
+            if (!res.ok || !data.diet_plan) {
+                setDietError((DIET_ERROR_MESSAGES[data.error] || "No se pudo generar tu dieta.") + (data.debug_detail ? ` [DEBUG: ${data.debug_detail}]` : ""));
+                return;
+            }
+            setDietPlans([data.diet_plan, ...dietPlans]);
+        }
+        catch (e) {
+            setDietError("No se pudo generar tu dieta.");
+        }
+        finally {
+            setGeneratingDiet(false);
         }
     }
     async function saveBody() {
@@ -1244,32 +1556,69 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                 React.createElement("div", { className: "h-4 w-2/3 bg-[#1E2535] rounded" }),
                 React.createElement("div", { className: "h-3 w-full bg-[#1E2535] rounded" }),
                 React.createElement("div", { className: "h-3 w-5/6 bg-[#1E2535] rounded" })),
-            React.createElement("div", { className: "absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0A0E14]/70" },
-                React.createElement("span", { className: "text-sm text-slate-200" }, label),
-                React.createElement("a", { href: `${STRIPE_PAYMENT_LINK}?client_reference_id=${session.user.id}`, target: "_blank", rel: "noopener noreferrer", className: "text-xs bg-[#3DDCFF] text-[#06121A] font-medium rounded-lg px-4 py-2 hover:brightness-110 transition" }, "Desbloquear con Premium")));
+            React.createElement("div", { className: "absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-center px-4 bg-[#0A0E14]/70" },
+                React.createElement("span", { className: "text-base text-slate-100 font-medium" }, "Accede a Premium ¡YA!"),
+                React.createElement("span", { className: "text-xs text-slate-400" }, label),
+                React.createElement("a", { href: `${STRIPE_PAYMENT_LINK}?client_reference_id=${session.user.id}`, target: "_blank", rel: "noopener noreferrer", className: "mt-1 text-xs bg-[#3DDCFF] text-[#06121A] font-medium rounded-lg px-4 py-2 hover:brightness-110 transition" }, "Desbloquear con Premium")));
     }
     function premiumLoading() {
         return React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-6 flex justify-center" }, React.createElement(Loader2, { size: 18, className: "animate-spin text-slate-600" }));
     }
     let nutritionContent;
-    let supplementsContent;
     if (!isPremium) {
-        nutritionContent = premiumTeaser("Plan de nutrición personalizado");
-        supplementsContent = premiumTeaser("Suplementos sugeridos personalizados");
+        nutritionContent = premiumTeaser("Plan de nutrición personalizado + generador de dietas con IA");
     }
-    else if (loadingPremiumContent) {
+    else if (loadingPremiumContent || loadingDietData) {
         nutritionContent = premiumLoading();
-        supplementsContent = premiumLoading();
     }
     else {
         const macroCalculator = React.createElement(MacroCalculatorCard, { weightDraft: weightDraft, onWeightChange: setWeightDraft, onSave: saveWeight, saving: savingWeight, macros: macros, goalLabel: GOAL_DIRECTION_LABELS[goalDirection] || "Sin definir" });
         const nutritionPlanBlock = matchedNutrition
             ? React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" }, React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-[#7FE3A3] mb-1" }, "Nutrición — ", GOAL_DIRECTION_LABELS[goalDirection]), React.createElement("div", { className: "text-sm text-slate-100 font-medium mb-2" }, matchedNutrition.title), React.createElement("div", { className: "text-xs text-slate-400 leading-relaxed space-y-2" }, React.createElement("div", null, React.createElement("span", { className: "text-slate-300" }, "Macros: "), matchedNutrition.macro_guidance), React.createElement("div", null, React.createElement("span", { className: "text-slate-300" }, "Horarios: "), matchedNutrition.meal_timing_guidance), React.createElement("div", null, React.createElement("span", { className: "text-slate-300" }, "Ejemplos: "), matchedNutrition.food_examples), React.createElement("div", null, React.createElement("span", { className: "text-slate-300" }, "Limita: "), matchedNutrition.foods_to_limit), showAdaptiveNote ? React.createElement("div", { className: "mt-2 bg-[#3DDCFF]/10 border border-[#3DDCFF]/20 rounded-lg px-3 py-2 text-[#3DDCFF]" }, matchedNutrition.adaptive_note) : null))
             : React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 text-sm text-slate-500" }, "Selecciona tu composición corporal arriba para ver tu plan de nutrición.");
-        nutritionContent = React.createElement("div", { className: "space-y-3" }, macroCalculator, nutritionPlanBlock);
-        const supplementCards = sortedSupplements.map((s) => React.createElement("div", { key: s.id, className: `bg-[#11161F] border rounded-2xl p-4 ${s.goal_category === weakestSupplementGoal ? "border-[#3DDCFF]/40" : "border-[#1E2535]"}` }, React.createElement("div", { className: "flex items-center justify-between mb-1" }, React.createElement("span", { className: "text-sm text-slate-100 font-medium" }, s.name), React.createElement("span", { className: `text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded ${s.evidence_tier === "strong" ? "text-[#7FE3A3] bg-[#7FE3A3]/10" : "text-[#FFC857] bg-[#FFC857]/10"}` }, s.evidence_tier === "strong" ? "Evidencia fuerte" : "Evidencia moderada")), React.createElement("div", { className: "text-xs text-slate-400 leading-relaxed mb-2" }, s.why_it_works), React.createElement("div", { className: "text-[11px] text-slate-500 font-mono mb-2" }, s.dosage_range), s.amazon_affiliate_url ? React.createElement("a", { href: s.amazon_affiliate_url, target: "_blank", rel: "noopener noreferrer sponsored", className: "text-xs text-[#3DDCFF] hover:brightness-110 transition" }, "Ver en Amazon →") : null));
-        supplementsContent = supplementCards.length > 0 ? React.createElement("div", { className: "grid sm:grid-cols-2 gap-3" }, supplementCards) : React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 text-sm text-slate-500" }, "No hay suplementos disponibles todavía.");
+        const currentTier = resolveClientTier(premiumSource, subscriptionTier);
+        const tierDisplayNames = Object.fromEntries(subscriptionPlans.map((p) => [p.tier, p.display_name]));
+        const planInfo = subscriptionPlans.find((p) => p.tier === currentTier) || null;
+        const quota = planInfo ? planInfo.monthly_diet_quota : 2;
+        const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+        const usedThisMonth = dietPlans.filter((d) => new Date(d.generated_at) >= startOfMonth).length;
+        const inputsComplete = !!(bodyWeightKg && bodyGender && dietProfileDraft.age && dietProfileDraft.height_cm && dietProfileDraft.activity_level && dietProfileDraft.nutrition_goal);
+        const currentSnapshot = inputsComplete ? dietInputsSnapshot({ weight_kg: bodyWeightKg, height_cm: parseFloat(dietProfileDraft.height_cm), age: parseInt(dietProfileDraft.age, 10), body_gender: bodyGender, activity_level: dietProfileDraft.activity_level, nutrition_goal: dietProfileDraft.nutrition_goal }, foodExclusions) : null;
+        const latestSnapshotRaw = dietPlans[0] ? dietPlans[0].input_snapshot : null;
+        const latestSnapshot = latestSnapshotRaw ? dietInputsSnapshot(latestSnapshotRaw, latestSnapshotRaw.exclusions || []) : null;
+        const inputsChanged = !latestSnapshot || !currentSnapshot || JSON.stringify(currentSnapshot) !== JSON.stringify(latestSnapshot);
+        const dietGenerator = React.createElement(DietGeneratorCard, {
+            profileDraft: dietProfileDraft,
+            onProfileDraftChange: setDietProfileDraft,
+            onSaveProfile: saveDietProfile,
+            savingProfile: savingDietProfile,
+            exclusions: foodExclusions,
+            newExclusionName: newExclusionName,
+            setNewExclusionName: setNewExclusionName,
+            newExclusionReason: newExclusionReason,
+            setNewExclusionReason: setNewExclusionReason,
+            onAddExclusion: addFoodExclusion,
+            addingExclusion: addingExclusion,
+            onRemoveExclusion: removeFoodExclusion,
+            removingExclusionId: removingExclusionId,
+            dietPlans: dietPlans,
+            currentTier: currentTier,
+            planInfo: planInfo,
+            tierDisplayNames: tierDisplayNames,
+            usedThisMonth: usedThisMonth,
+            quota: quota,
+            inputsComplete: inputsComplete,
+            inputsChanged: inputsChanged,
+            generating: generatingDiet,
+            dietError: dietError,
+            dietQuotaInfo: dietQuotaInfo,
+            onGenerate: generateDiet,
+        });
+        nutritionContent = React.createElement("div", { className: "space-y-3" }, macroCalculator, nutritionPlanBlock, dietGenerator);
     }
+    const supplementCards = sortedSupplements.map((s) => React.createElement("div", { key: s.id, className: `bg-[#11161F] border rounded-2xl p-4 ${s.goal_category === weakestSupplementGoal ? "border-[#3DDCFF]/40" : "border-[#1E2535]"}` }, React.createElement("div", { className: "flex items-center justify-between mb-1" }, React.createElement("span", { className: "text-sm text-slate-100 font-medium" }, s.name), React.createElement("span", { className: `text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded ${s.evidence_tier === "strong" ? "text-[#7FE3A3] bg-[#7FE3A3]/10" : "text-[#FFC857] bg-[#FFC857]/10"}` }, s.evidence_tier === "strong" ? "Evidencia fuerte" : "Evidencia moderada")), React.createElement("div", { className: "text-xs text-slate-400 leading-relaxed mb-2" }, s.why_it_works), React.createElement("div", { className: "text-[11px] text-slate-500 font-mono mb-2" }, s.dosage_range), s.amazon_affiliate_url ? React.createElement("a", { href: s.amazon_affiliate_url, target: "_blank", rel: "noopener noreferrer sponsored", className: "text-xs text-[#3DDCFF] hover:brightness-110 transition" }, "Ver en Amazon →") : null));
+    // Suplementos is fully open (no isPremium gating) — see loadSupplements above.
+    const supplementsContent = supplementCards.length > 0 ? React.createElement("div", { className: "grid sm:grid-cols-2 gap-3" }, supplementCards) : React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 text-sm text-slate-500" }, "No hay suplementos disponibles todavía.");
     const TABS = [
         { key: "inicio", label: "Inicio" },
         { key: "entrenamiento", label: "Entrenamiento" },
@@ -1376,7 +1725,10 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                 React.createElement("button", { onClick: saveToday, disabled: saving, className: "mt-5 w-full sm:w-auto flex items-center justify-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-6 py-2.5 hover:brightness-110 transition disabled:opacity-50" },
                     saving ? React.createElement(Loader2, { size: 16, className: "animate-spin" }) : saved ? React.createElement(Check, { size: 16 }) : React.createElement(ChevronRight, { size: 16 }),
                     saved ? "Guardado" : "Guardar registro de hoy")),
-            activeTab === "entrenamiento" && React.createElement(MyRoutinesSection, { assignments: myRoutineAssignments }),
+            activeTab === "entrenamiento" && !isPremium && React.createElement("section", null,
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Entrenamiento"),
+                premiumTeaser("Rutina asignada y biblioteca de ejercicios")),
+            activeTab === "entrenamiento" && isPremium && React.createElement(MyRoutinesSection, { assignments: myRoutineAssignments }),
             activeTab === "entrenamiento" && isCoach && React.createElement("section", null,
                 React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Panel de coach"),
                 React.createElement(CoachPanel, {
@@ -1393,9 +1745,11 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                     creatingRoutine: creatingRoutine,
                     onAssign: handleAssignRoutine,
                     assigningRoutineId: assigningRoutineId,
+                    onDelete: handleDeleteRoutine,
+                    deletingRoutineId: deletingRoutineId,
                     loading: loadingCoachData,
                 })),
-            activeTab === "entrenamiento" && React.createElement("section", null,
+            activeTab === "entrenamiento" && isPremium && React.createElement("section", null,
                 React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Biblioteca de ejercicios"),
                 React.createElement(ExerciseLibrary, { exercises: exerciseLibrary, loading: loadingExerciseLibrary })),
             activeTab === "inicio" && React.createElement("section", null,
