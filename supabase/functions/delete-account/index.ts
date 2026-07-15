@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY")!;
 
 // Same CORS/preflight requirement as generate-diet-plan — called directly from the
 // browser with an Authorization header, so the browser's OPTIONS preflight must be
@@ -51,6 +52,22 @@ async function sbDelete(path: string) {
   }
 }
 
+// Cancels immediately (not cancel_at_period_end) — the account itself is being wiped,
+// so there's nothing left to bill or serve for the remainder of the period. Missing/
+// already-canceled subscriptions are not errors here: Stripe 404s on an unknown id,
+// and re-deleting an already-canceled subscription 400s — both are logged and
+// swallowed so a stale/absent stripe_subscription_id never blocks account deletion.
+async function cancelStripeSubscription(subscriptionId: string | null | undefined, context: string) {
+  if (!subscriptionId) return;
+  const res = await fetch(`https://api.stripe.com/v1/subscriptions/${subscriptionId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` },
+  });
+  if (!res.ok) {
+    console.error(`Failed to cancel Stripe subscription ${subscriptionId} (${context}): ${res.status} ${await res.text()}`);
+  }
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -66,6 +83,20 @@ Deno.serve(async (req: Request) => {
   if (!userId) return json({ error: "unauthorized" }, 401);
 
   try {
+    // Cancel any active Stripe subscription — as client and/or as coach, since neither
+    // is exclusive of the other — before touching the database. Without this, deleting
+    // the account leaves a live Stripe subscription with no linked profile/coaches row
+    // to reconcile it against, so the person keeps getting billed for an account that
+    // no longer exists.
+    const [profileRows, coachRows] = await Promise.all([
+      sbGet(`profiles?id=eq.${userId}&select=stripe_subscription_id`),
+      sbGet(`coaches?id=eq.${userId}&select=stripe_subscription_id`),
+    ]);
+    await Promise.all([
+      cancelStripeSubscription(profileRows?.[0]?.stripe_subscription_id, "client plan"),
+      cancelStripeSubscription(coachRows?.[0]?.stripe_subscription_id, "coach plan"),
+    ]);
+
     // Wipe every table that isn't already covered by an `on delete cascade` FK to
     // profiles/auth.users. Redundant where a cascade does exist (the delete just
     // affects 0 rows), but this repo's earliest tables predate any migration file, so
