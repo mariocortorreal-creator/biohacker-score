@@ -31,9 +31,7 @@ No vendemos tus datos. Los compartimos únicamente con los proveedores necesario
 
 ## 4. Cuánto tiempo conservamos tus datos
 
-Conservamos tu información mientras tu cuenta esté activa. Puedes solicitar la eliminación de tu cuenta y datos asociados escribiendo a `[correo de soporte]`.
-
-> **Pendiente de ingeniería antes de publicar en Apple App Store:** las guías de revisión de Apple (5.1.1v) exigen que, si una app permite crear cuenta, también debe permitir eliminar la cuenta *dentro de la app*, no solo por correo. Hoy esa función no existe en Biohacker Score — hay que agregar un botón de "Eliminar mi cuenta" antes de enviar a revisión de Apple. Google Play es más flexible (acepta un link/flujo fuera de la app), pero conviene igualarlo por consistencia.
+Conservamos tu información mientras tu cuenta esté activa. Puedes eliminar tu cuenta y todos los datos asociados en cualquier momento desde la app (pestaña "Metas" → "Eliminar cuenta"), o escribiendo a `[correo de soporte]`. La eliminación desde la app es inmediata y permanente: borra tu perfil, tu historial de registros diarios, tus planes de dieta y, si eres coach, tus rutinas y tu lista de clientes.
 
 ## 5. Tus derechos
 
