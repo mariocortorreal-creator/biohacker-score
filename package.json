@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "sync": "node scripts/sync-web.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test test/pure-functions.test.js test/syntax-check.test.js"
   },
   "keywords": [],
   "author": "",
