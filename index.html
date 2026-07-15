@@ -49,7 +49,15 @@ const SUPABASE_URL = "https://bciwxtjgabbnuxjxrwzt.supabase.co";
 const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJjaXd4dGpnYWJibnV4anhyd3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyNDMwMjksImV4cCI6MjA5NzgxOTAyOX0.f6zauUfM8seFtpvV4aAhEr54glLxtpu7Agfs4MjPpwQ";
 const AUTH = `${SUPABASE_URL}/auth/v1`;
 const REST = `${SUPABASE_URL}/rest/v1`;
-const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/test_9B64gA80c7zQdYddJS6oo00";
+// Real Stripe Payment Links confirmed by Mario 2026-07-15 — note these are still
+// TEST-mode URLs (buy.stripe.com/test_...), so no real card can be charged through them
+// yet. Swap for the live-mode equivalents before this goes in front of real users.
+const CLIENT_PLAN_LINKS = {
+    basico: "https://buy.stripe.com/test_9B64gA80c7zQdYddJS6oo00",
+    pro: "https://buy.stripe.com/test_00w3cw0xKaM2cU9fS06oo03",
+    elite: "https://buy.stripe.com/test_fZu28seoA4nEbQ5eNW6oo02",
+};
+const COACH_PLAN_LINK = "https://buy.stripe.com/test_4gM3cw3JW07og6lbBK6oo01";
 const SESSION_KEY = "biohacker_score_session";
 // window.Capacitor is injected automatically by the native app shell (Android/iOS) at page load;
 // it's simply undefined in a plain browser, which is exactly the signal used to hide native-only UI.
@@ -994,7 +1002,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     const [deletingAccount, setDeletingAccount] = useState(false);
     const [deleteAccountError, setDeleteAccountError] = useState("");
     const authHeaders = { apikey: ANON_KEY, Authorization: `Bearer ${session.accessToken}`, "Content-Type": "application/json" };
-    useEffect(() => { loadEntries(); loadPlan(); checkCoachStatus(); loadMyRoutineAssignments(); loadExerciseLibrary(); loadSupplements(); }, []);
+    useEffect(() => { loadEntries(); loadPlan(); checkCoachStatus(); loadMyRoutineAssignments(); loadExerciseLibrary(); loadSupplements(); loadSubscriptionPlans(); }, []);
     useEffect(() => {
         const id = setInterval(() => onRefreshSession === null || onRefreshSession === void 0 ? void 0 : onRefreshSession(), 45 * 60 * 1000);
         return () => clearInterval(id);
@@ -1229,18 +1237,30 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             setLoadingPremiumContent(false);
         }
     }
+    // Unlike the rest of loadDietData, subscription_plans has to be visible to free
+    // users too (they're exactly who needs to see tier prices to decide whether to
+    // upgrade), so it's loaded separately and unconditionally rather than gated behind
+    // isPremium — see the plain useEffect below.
+    async function loadSubscriptionPlans() {
+        try {
+            const res = await fetch(`${REST}/subscription_plans?select=*&order=price_usd.asc`, { headers: authHeaders });
+            const data = await res.json();
+            setSubscriptionPlans(Array.isArray(data) ? data : []);
+        }
+        catch (e) {
+            console.error(e);
+        }
+    }
     async function loadDietData() {
         setLoadingDietData(true);
         try {
-            const [exclRes, dietsRes, plansRes] = await Promise.all([
+            const [exclRes, dietsRes] = await Promise.all([
                 fetch(`${REST}/client_food_exclusions?client_id=eq.${session.user.id}&select=*&order=created_at.asc`, { headers: authHeaders }),
                 fetch(`${REST}/diet_plans?client_id=eq.${session.user.id}&select=*&order=generated_at.desc`, { headers: authHeaders }),
-                fetch(`${REST}/subscription_plans?select=*`, { headers: authHeaders }),
             ]);
-            const [exclData, dietsData, plansData] = await Promise.all([exclRes.json(), dietsRes.json(), plansRes.json()]);
+            const [exclData, dietsData] = await Promise.all([exclRes.json(), dietsRes.json()]);
             setFoodExclusions(Array.isArray(exclData) ? exclData : []);
             setDietPlans(Array.isArray(dietsData) ? dietsData : []);
-            setSubscriptionPlans(Array.isArray(plansData) ? plansData : []);
         }
         catch (e) {
             console.error(e);
@@ -1578,16 +1598,24 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             return a.display_order - b.display_order;
         });
     }, [supplementRecs, weakestSupplementGoal]);
+    function tierUpgradeButtons(size) {
+        const cls = size === "sm"
+            ? "text-[11px] bg-[#3DDCFF] text-[#06121A] font-medium rounded-lg px-3 py-1.5 hover:brightness-110 transition"
+            : "text-center bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-5 py-2.5 hover:brightness-110 transition";
+        return subscriptionPlans
+            .filter((p) => CLIENT_PLAN_LINKS[p.tier])
+            .map((p) => React.createElement("a", { key: p.tier, href: `${CLIENT_PLAN_LINKS[p.tier]}?client_reference_id=${session.user.id}`, target: "_blank", rel: "noopener noreferrer", className: cls }, `${p.display_name} · $${Number(p.price_usd).toFixed(2)}/mes`));
+    }
     function premiumTeaser(label) {
         return React.createElement("div", { className: "relative bg-[#11161F] border border-[#1E2535] rounded-2xl p-6 overflow-hidden" },
             React.createElement("div", { className: "space-y-3 blur-sm select-none pointer-events-none" },
                 React.createElement("div", { className: "h-4 w-2/3 bg-[#1E2535] rounded" }),
                 React.createElement("div", { className: "h-3 w-full bg-[#1E2535] rounded" }),
                 React.createElement("div", { className: "h-3 w-5/6 bg-[#1E2535] rounded" })),
-            React.createElement("div", { className: "absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-center px-4 bg-[#0A0E14]/70" },
+            React.createElement("div", { className: "absolute inset-0 flex flex-col items-center justify-center gap-2 text-center px-4 bg-[#0A0E14]/70" },
                 React.createElement("span", { className: "text-base text-slate-100 font-medium" }, "Accede a Premium ¡YA!"),
                 React.createElement("span", { className: "text-xs text-slate-400" }, label),
-                React.createElement("a", { href: `${STRIPE_PAYMENT_LINK}?client_reference_id=${session.user.id}`, target: "_blank", rel: "noopener noreferrer", className: "mt-1 text-xs bg-[#3DDCFF] text-[#06121A] font-medium rounded-lg px-4 py-2 hover:brightness-110 transition" }, "Desbloquear con Premium")));
+                React.createElement("div", { className: "flex flex-wrap items-center justify-center gap-1.5 mt-1" }, tierUpgradeButtons("sm"))));
     }
     function premiumLoading() {
         return React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-6 flex justify-center" }, React.createElement(Loader2, { size: 18, className: "animate-spin text-slate-600" }));
@@ -1848,7 +1876,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                         React.createElement("div", { className: "h-3 w-5/6 bg-[#1E2535] rounded" })),
                     React.createElement("div", { className: "absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0A0E14]/70" },
                         React.createElement("span", { className: "text-sm text-slate-200" }, "Recomendaciones personalizadas por categor\u00EDa"),
-                        React.createElement("a", { href: `${STRIPE_PAYMENT_LINK}?client_reference_id=${session.user.id}`, target: "_blank", rel: "noopener noreferrer", className: "text-xs bg-[#3DDCFF] text-[#06121A] font-medium rounded-lg px-4 py-2 hover:brightness-110 transition" }, "Desbloquear con Premium"))))),
+                        React.createElement("div", { className: "flex flex-wrap items-center justify-center gap-1.5" }, tierUpgradeButtons("sm")))))),
             activeTab === "nutricion" && React.createElement("section", null,
                 React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Nutrici\u00F3n sugerida seg\u00FAn tu objetivo"),
                 nutritionContent),
@@ -1871,9 +1899,9 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                 React.createElement("button", { onClick: loadPlan, className: "text-xs text-slate-500 hover:text-slate-300 transition" }, "Actualizar estado"))) : (React.createElement("div", { className: "flex flex-col sm:flex-row sm:items-center justify-between gap-4" },
                 React.createElement("div", null,
                     React.createElement("div", { className: "text-sm text-slate-200" }, "Plan Free"),
-                    React.createElement("div", { className: "text-xs text-slate-500 mt-0.5" }, "Premium ($7.99/mes): recomendaciones por categor\u00EDa, protocolos personalizados y exportaci\u00F3n de datos.")),
+                    React.createElement("div", { className: "text-xs text-slate-500 mt-0.5" }, "Premium: recomendaciones por categor\u00EDa, protocolos personalizados y exportaci\u00F3n de datos.")),
                 React.createElement("div", { className: "flex flex-col items-end gap-2 shrink-0" },
-                    React.createElement("a", { href: `${STRIPE_PAYMENT_LINK}?client_reference_id=${session.user.id}`, target: "_blank", rel: "noopener noreferrer", className: "text-center bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-5 py-2.5 hover:brightness-110 transition" }, "Mejorar a Premium"),
+                    React.createElement("div", { className: "flex flex-wrap justify-end gap-1.5" }, tierUpgradeButtons("lg")),
                     React.createElement("button", { onClick: loadPlan, className: "text-[11px] text-slate-500 hover:text-slate-300 transition" }, "Ya pagu\u00E9, actualizar estado"))))),
             activeTab === "metas" && accountDangerZoneSection)));
 }
