@@ -10,11 +10,16 @@ const COACH_PRICE_ID = "price_1TrTmVLb3yxBeQwgrgwMvW66";
 const COACH_PRICE_CENTS = 2000;
 
 // Client plans replace the old single $7.99/mo individual plan (never had paying
-// customers, safe to retire outright). These cents amounts must stay in sync with
+// customers, safe to retire outright). Real Stripe amounts confirmed against the
+// actual Payment Links (básico price_1To7SuLb3yxBeQwgnfiEuRZF, pro
+// price_1Tsnw2Lb3yxBeQwgiESzfDdN, elite price_1TsoCELb3yxBeQwg2az3dJJa) — a prior
+// version of this file used placeholder amounts (999/1399/1999) that never matched a
+// real checkout, so a paying client would have hit the unmatched-amount branch below
+// and never received premium. These cents amounts must stay in sync with
 // subscription_plans.price_usd — checkout.session.completed doesn't carry price/line-item
 // info without an extra Stripe API call (same tradeoff already accepted for the coach
 // plan above), so tier is matched by exact charged amount, same as the coach detection.
-const TIER_AMOUNTS_CENTS: Record<string, number> = { basico: 999, pro: 1399, elite: 1999 };
+const TIER_AMOUNTS_CENTS: Record<string, number> = { basico: 799, pro: 1400, elite: 1900 };
 
 async function verifyStripeSignature(rawBody: string, sigHeader: string, secret: string) {
   const parts = Object.fromEntries(
