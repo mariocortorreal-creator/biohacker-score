@@ -1,12 +1,12 @@
 # Política de privacidad — Biohacker Score
 
-_Última actualización: [completar fecha de publicación]_
+_Última actualización: 16 de agosto de 2026_
 
-**Nota antes de publicar:** este texto es un borrador de partida para que el equipo legal o Mario lo revise antes de publicarlo en una URL pública. No sustituye asesoría legal. Los campos entre `[corchetes]` deben completarse antes de publicar.
+**Nota antes de publicar:** este texto es un borrador de partida para que el equipo legal o Mario lo revise antes de publicarlo en una URL pública. No sustituye asesoría legal.
 
 ## 1. Quiénes somos
 
-Biohacker Score es una aplicación de seguimiento de hábitos (sueño, ayuno/nutrición, ejercicio, estrés) con recomendaciones personalizadas y, opcionalmente, seguimiento por un coach. Contacto: `[correo de soporte]`.
+Biohacker Score es una aplicación de seguimiento de hábitos (sueño, ayuno/nutrición, ejercicio, estrés) con recomendaciones personalizadas y, opcionalmente, seguimiento por un coach. Contacto: `biohackerlatino@gmail.com`.
 
 ## 2. Qué datos recolectamos
 
@@ -31,15 +31,15 @@ No vendemos tus datos. Los compartimos únicamente con los proveedores necesario
 
 ## 4. Cuánto tiempo conservamos tus datos
 
-Conservamos tu información mientras tu cuenta esté activa. Puedes eliminar tu cuenta y todos los datos asociados en cualquier momento desde la app (pestaña "Metas" → "Eliminar cuenta"), o escribiendo a `[correo de soporte]`. La eliminación desde la app es inmediata y permanente: borra tu perfil, tu historial de registros diarios, tus planes de dieta y, si eres coach, tus rutinas y tu lista de clientes.
+Conservamos tu información mientras tu cuenta esté activa. Puedes eliminar tu cuenta y todos los datos asociados en cualquier momento desde la app (pestaña "Metas" → "Eliminar cuenta"), o escribiendo a `biohackerlatino@gmail.com`. La eliminación desde la app es inmediata y permanente: borra tu perfil, tu historial de registros diarios, tus planes de dieta y, si eres coach, tus rutinas y tu lista de clientes.
 
 ## 5. Tus derechos
 
-Puedes solicitar acceso, corrección o eliminación de tus datos personales en cualquier momento escribiendo a `[correo de soporte]`.
+Puedes solicitar acceso, corrección o eliminación de tus datos personales en cualquier momento escribiendo a `biohackerlatino@gmail.com`.
 
 ## 6. Menores de edad
 
-Biohacker Score no está dirigida a menores de [13/16 — confirmar según jurisdicción objetivo] años.
+Biohacker Score no está dirigida a menores de 13 años.
 
 ## 7. Cambios a esta política
 
@@ -47,4 +47,4 @@ Podemos actualizar esta política ocasionalmente. Notificaremos cambios importan
 
 ## 8. Contacto
 
-`[correo de soporte]` — `[dirección legal si aplica]`
+`biohackerlatino@gmail.com`
