@@ -1,17 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { calculateMacroTargets } from "../_shared/diet-macros.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-
-// Standard Mifflin-St Jeor activity multipliers.
-const ACTIVITY_MULTIPLIERS: Record<string, number> = {
-  sedentario: 1.2,
-  ligero: 1.375,
-  moderado: 1.55,
-  activo: 1.725,
-  muy_activo: 1.9,
-};
 
 // Called directly from the browser, so the preflight OPTIONS request the browser sends
 // ahead of a POST with Authorization/Content-Type headers must be answered here — without
@@ -151,23 +143,14 @@ Deno.serve(async (req: Request) => {
 
     // 5. Cálculo determinístico (Mifflin-St Jeor) — la IA NO calcula números, solo arma el menú
     const { weight_kg, height_cm, age, body_gender, activity_level, nutrition_goal } = profile;
-    const bmr =
-      body_gender === "female"
-        ? 10 * weight_kg + 6.25 * height_cm - 5 * age - 161
-        : 10 * weight_kg + 6.25 * height_cm - 5 * age + 5;
-    const multiplier = ACTIVITY_MULTIPLIERS[activity_level] ?? 1.375;
-    const tdee = bmr * multiplier;
-
-    let calorieTarget = tdee;
-    if (nutrition_goal === "cut") calorieTarget -= 500;
-    if (nutrition_goal === "bulk") calorieTarget += 300;
-    calorieTarget = Math.round(calorieTarget);
-
-    const proteinG = Math.round(weight_kg * 2.0);
-    const proteinCals = proteinG * 4;
-    const fatG = Math.round((calorieTarget * 0.28) / 9);
-    const fatCals = fatG * 9;
-    const carbsG = Math.max(0, Math.round((calorieTarget - proteinCals - fatCals) / 4));
+    const { calorieTarget, proteinG, carbsG, fatG } = calculateMacroTargets({
+      weight_kg,
+      height_cm,
+      age,
+      body_gender,
+      activity_level,
+      nutrition_goal,
+    });
 
     // 6. Claude genera SOLO el contenido del menú, respetando los targets numéricos exactos
     if (!ANTHROPIC_API_KEY) {

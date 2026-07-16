@@ -1,4 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { verifyStripeSignature } from "../_shared/stripe-signature.mjs";
+import { mapStripeStatusToCoachStatus, resolvePlanFromAmount } from "../_shared/plan-matching.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -20,34 +22,6 @@ const COACH_PRICE_CENTS = 2000;
 // info without an extra Stripe API call (same tradeoff already accepted for the coach
 // plan above), so tier is matched by exact charged amount, same as the coach detection.
 const TIER_AMOUNTS_CENTS: Record<string, number> = { basico: 799, pro: 1400, elite: 1900 };
-
-async function verifyStripeSignature(rawBody: string, sigHeader: string, secret: string) {
-  const parts = Object.fromEntries(
-    sigHeader.split(",").map((p) => p.split("=") as [string, string])
-  );
-  const timestamp = parts["t"];
-  const signature = parts["v1"];
-  if (!timestamp || !signature) return false;
-
-  const signedPayload = `${timestamp}.${rawBody}`;
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const sigBuffer = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signedPayload));
-  const expected = Array.from(new Uint8Array(sigBuffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-
-  // timing-safe-ish compare
-  if (expected.length !== signature.length) return false;
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
-  return diff === 0;
-}
 
 async function updateProfile(filterColumn: string, filterValue: string, patch: Record<string, unknown>) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?${filterColumn}=eq.${filterValue}`, {
@@ -128,15 +102,6 @@ async function tierForPriceId(priceId: string): Promise<string | null> {
   return Array.isArray(rows) && rows[0] ? rows[0].tier : null;
 }
 
-function mapStripeStatusToCoachStatus(stripeStatus: string): "active" | "past_due" | "canceled" | null {
-  if (stripeStatus === "active" || stripeStatus === "trialing") return "active";
-  if (stripeStatus === "past_due") return "past_due";
-  if (stripeStatus === "canceled" || stripeStatus === "unpaid" || stripeStatus === "incomplete_expired") {
-    return "canceled";
-  }
-  return null; // e.g. "incomplete" — not an actionable state yet, leave untouched
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
@@ -160,16 +125,9 @@ Deno.serve(async (req: Request) => {
         const customerId = session.customer;
         const subscriptionId = session.subscription;
 
-        // Checkout Sessions don't carry price/line-item info by default (no extra Stripe
-        // API call is wired up in this function), so which plan was bought is
-        // distinguished by the fixed checkout amount. All Payment Links disallow promo
-        // codes and have no automatic tax, so amount_total reliably equals the price.
-        const isCoachPayment = session.amount_total === COACH_PRICE_CENTS;
-        const matchedTier = Object.entries(TIER_AMOUNTS_CENTS).find(
-          ([, cents]) => cents === session.amount_total
-        )?.[0];
+        const resolved = resolvePlanFromAmount(session.amount_total, COACH_PRICE_CENTS, TIER_AMOUNTS_CENTS);
 
-        if (isCoachPayment) {
+        if (resolved?.type === "coach") {
           if (userId) {
             await updateCoach(
               "id",
@@ -183,7 +141,7 @@ Deno.serve(async (req: Request) => {
               "checkout.session.completed"
             );
           }
-        } else if (matchedTier && userId) {
+        } else if (resolved?.type === "client" && userId) {
           // Client plan (básico/pro/elite) — sets premium_source = 'paid' so is_premium()
           // actually unlocks access; the old code only set the legacy `plan` display
           // column here, which meant a real paying customer never got premium (never hit
@@ -191,7 +149,7 @@ Deno.serve(async (req: Request) => {
           await updateProfile("id", userId, {
             plan: "premium",
             premium_source: "paid",
-            subscription_tier: matchedTier,
+            subscription_tier: resolved.tier,
             stripe_customer_id: customerId,
             stripe_subscription_id: subscriptionId,
             premium_since: new Date().toISOString(),

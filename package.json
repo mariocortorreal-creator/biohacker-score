@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "sync": "node scripts/sync-web.js",
-    "test": "node --test test/pure-functions.test.js test/syntax-check.test.js"
+    "test": "node --test test/pure-functions.test.js test/syntax-check.test.js test/stripe-signature.test.mjs test/plan-matching.test.mjs test/diet-macros.test.mjs"
   },
   "keywords": [],
   "author": "",
