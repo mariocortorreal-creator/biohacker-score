@@ -55,10 +55,14 @@ workflows:
           npm run sync
       - name: Commit and push generated ios/ project to a new review branch
         script: |
-          if [ -z "$GH_PUSH_TOKEN" ]; then
+          set -euo pipefail
+          if [ -z "${GH_PUSH_TOKEN:-}" ]; then
             echo "GH_PUSH_TOKEN is not set — add it as a secure environment variable in this workflow before running it."
             exit 1
           fi
+          # Strip any stray whitespace/newline from the token (a trailing \n from
+          # pasting it breaks the URL below with "Malformed input to a URL function").
+          CLEAN_TOKEN="$(printf '%s' "$GH_PUSH_TOKEN" | tr -d '[:space:]')"
           git config user.name "Codemagic CI"
           git config user.email "ci@codemagic.io"
           PUSH_BRANCH="codemagic/add-ios-project-${CM_BUILD_ID:-$(date +%s)}"
@@ -71,7 +75,7 @@ workflows:
           git commit -m "chore: add generated iOS project via Codemagic (cap add ios)"
           # Deliberately no --force: this is always a brand-new branch name (per build id),
           # so a plain push is enough and any unexpected remote history is never overwritten.
-          git push "https://x-access-token:${GH_PUSH_TOKEN}@github.com/mariocortorreal-creator/biohacker-score.git" "$PUSH_BRANCH"
+          git push "https://x-access-token:${CLEAN_TOKEN}@github.com/mariocortorreal-creator/biohacker-score.git" "$PUSH_BRANCH"
           echo "Pushed to branch: $PUSH_BRANCH — open a PR or merge it into main manually."
     artifacts:
       - ios/**/*
