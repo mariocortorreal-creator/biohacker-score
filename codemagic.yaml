@@ -30,3 +30,46 @@ workflows:
           ./gradlew assembleDebug
     artifacts:
       - android/app/build/outputs/apk/debug/*.apk
+
+  ios-setup:
+    name: iOS Project Setup (add + push back)
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    environment:
+      node: 22
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+      - name: Add iOS platform (skip if already present)
+        script: |
+          if [ -d "ios" ]; then
+            echo "ios/ already exists, skipping cap add ios"
+          else
+            npx cap add ios
+          fi
+      - name: Sync web assets into native project
+        script: |
+          mkdir -p www
+          npm run sync
+      - name: Commit and push generated ios/ project to a new review branch
+        script: |
+          if [ -z "$GH_PUSH_TOKEN" ]; then
+            echo "GH_PUSH_TOKEN is not set — add it as a secure environment variable in this workflow before running it."
+            exit 1
+          fi
+          git config user.name "Codemagic CI"
+          git config user.email "ci@codemagic.io"
+          PUSH_BRANCH="codemagic/add-ios-project-${CM_BUILD_ID:-$(date +%s)}"
+          git checkout -b "$PUSH_BRANCH"
+          git add ios/
+          if git diff --cached --quiet; then
+            echo "Nothing to commit — ios/ matches what's already tracked."
+            exit 0
+          fi
+          git commit -m "chore: add generated iOS project via Codemagic (cap add ios)"
+          # Deliberately no --force: this is always a brand-new branch name (per build id),
+          # so a plain push is enough and any unexpected remote history is never overwritten.
+          git push "https://x-access-token:${GH_PUSH_TOKEN}@github.com/mariocortorreal-creator/biohacker-score.git" "$PUSH_BRANCH"
+          echo "Pushed to branch: $PUSH_BRANCH — open a PR or merge it into main manually."
+    artifacts:
+      - ios/**/*
