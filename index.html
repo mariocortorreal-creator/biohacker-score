@@ -1366,7 +1366,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             }
             setDietPlans([data.diet_plan, ...dietPlans]);
         }
-        catch (e) {
+        catch {
             setDietError("No se pudo generar tu dieta.");
         }
         finally {
@@ -1390,7 +1390,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             }
             setDeleteStep("done");
         }
-        catch (e) {
+        catch {
             setDeleteAccountError("No se pudo eliminar tu cuenta. Intenta de nuevo o escríbenos.");
         }
         finally {
@@ -1939,7 +1939,7 @@ function App() {
                     setSession(fresh);
                 }
             }
-            catch (e) {
+            catch {
                 localStorage.removeItem(SESSION_KEY);
             }
             finally {

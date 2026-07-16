@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "sync": "node scripts/sync-web.js",
+    "lint": "eslint .",
     "test": "node --test test/pure-functions.test.js test/syntax-check.test.js test/stripe-signature.test.mjs test/plan-matching.test.mjs test/diet-macros.test.mjs"
   },
   "keywords": [],
@@ -19,6 +20,11 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.4.1",
-    "esbuild": "^0.28.1"
+    "@eslint/js": "^9.39.5",
+    "@typescript-eslint/parser": "^8.64.0",
+    "esbuild": "^0.28.1",
+    "eslint": "^9.39.5",
+    "eslint-plugin-html": "^8.1.4",
+    "globals": "^15.15.0"
   }
 }
