@@ -19,6 +19,7 @@
     "capacitor-health": "^8.1.2"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.4.1",
     "@eslint/js": "^9.39.5",
     "@typescript-eslint/parser": "^8.64.0",
