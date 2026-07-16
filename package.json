@@ -6,7 +6,7 @@
   "scripts": {
     "sync": "node scripts/sync-web.js",
     "lint": "eslint .",
-    "test": "node --test test/pure-functions.test.js test/syntax-check.test.js test/stripe-signature.test.mjs test/plan-matching.test.mjs test/diet-macros.test.mjs"
+    "test": "node --test test/pure-functions.test.js test/syntax-check.test.js test/stripe-signature.test.mjs test/plan-matching.test.mjs test/diet-macros.test.mjs test/revenuecat-event-mapping.test.mjs"
   },
   "keywords": [],
   "author": "",
