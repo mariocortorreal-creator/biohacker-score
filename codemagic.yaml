@@ -37,6 +37,8 @@ workflows:
     instance_type: mac_mini_m2
     environment:
       node: 22
+      groups:
+        - biohacker-score
     scripts:
       - name: Install npm dependencies
         script: npm ci
