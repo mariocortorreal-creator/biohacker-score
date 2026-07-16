@@ -4,5 +4,7 @@
 // This file's only job is to expose window.CapacitorHealth so index.html can call it
 // as a normal global, same as it already does with window.Capacitor (auto-injected natively).
 import { Health } from 'capacitor-health';
+import { Purchases } from '@revenuecat/purchases-capacitor';
 
 window.CapacitorHealth = Health;
+window.CapacitorPurchases = Purchases;
