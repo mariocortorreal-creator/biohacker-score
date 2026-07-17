@@ -57,21 +57,6 @@ async function sbRpc(fn: string, args: Record<string, unknown>) {
   return res.json();
 }
 
-async function sbInsert(path: string, body: Record<string, unknown>) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    method: "POST",
-    headers: {
-      apikey: SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`INSERT ${path} failed: ${res.status} ${await res.text()}`);
-  return res.json();
-}
-
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -239,16 +224,40 @@ Responde ÚNICAMENTE con un objeto JSON. Sin markdown, sin explicaciones, sin ra
       })),
     };
 
-    const inserted = await sbInsert("diet_plans", {
-      client_id: clientId,
-      calorie_target: calorieTarget,
-      protein_g: proteinG,
-      carbs_g: carbsG,
-      fat_g: fatG,
-      meal_plan: mealPlan,
-      input_snapshot: inputSnapshot,
+    // Inserted via a direct fetch (not the generic sbInsert helper, which just
+    // throws on !ok) so a rejection from trg_enforce_diet_plan_quota — which
+    // re-checks the quota atomically at insert time and can reject a request that
+    // passed the pre-check above under concurrent load — surfaces the same
+    // quota_exceeded shape the pre-check returns, instead of a generic 500.
+    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/diet_plans`, {
+      method: "POST",
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        calorie_target: calorieTarget,
+        protein_g: proteinG,
+        carbs_g: carbsG,
+        fat_g: fatG,
+        meal_plan: mealPlan,
+        input_snapshot: inputSnapshot,
+      }),
     });
 
+    if (!insertRes.ok) {
+      const errBody = await insertRes.text();
+      if (errBody.includes("Cuota mensual de planes de alimentación")) {
+        return json({ quota_exceeded: true, used_this_month: usedThisMonth, quota }, 200);
+      }
+      console.error("diet_plans insert failed:", insertRes.status, errBody);
+      return json({ error: "internal_error" }, 500);
+    }
+
+    const inserted = await insertRes.json();
     return json({ diet_plan: Array.isArray(inserted) ? inserted[0] : inserted }, 200);
   } catch (err) {
     console.error("generate-diet-plan error:", err);
