@@ -20,46 +20,46 @@ test("cachedFetchJSON fetches over the network and populates the cache on a cold
   let fetchCalls = 0;
   const fetcher = async () => {
     fetchCalls++;
-    return { json: async () => ({ hello: "world" }) };
+    return { json: async () => [{ id: 1, name: "item1" }] };
   };
 
   const data = await cachedFetchJSON("k", "http://x", {}, 1000, storage, fetcher);
 
-  assert.deepEqual(data, { hello: "world" });
+  assert.deepEqual(data, [{ id: 1, name: "item1" }]);
   assert.equal(fetchCalls, 1);
   const stored = JSON.parse(storage._store["k"]);
-  assert.deepEqual(stored.data, { hello: "world" });
+  assert.deepEqual(stored.data, [{ id: 1, name: "item1" }]);
   assert.equal(typeof stored.ts, "number");
 });
 
 test("cachedFetchJSON serves from cache within the TTL without calling fetch", async () => {
-  const cached = JSON.stringify({ data: { hello: "cached" }, ts: Date.now() });
+  const cached = JSON.stringify({ data: [{ id: 2, name: "cached" }], ts: Date.now() });
   const storage = makeStorage({ k: cached });
   let fetchCalls = 0;
   const fetcher = async () => {
     fetchCalls++;
-    return { json: async () => ({ hello: "network" }) };
+    return { json: async () => [{ id: 2, name: "network" }] };
   };
 
   const data = await cachedFetchJSON("k", "http://x", {}, 60000, storage, fetcher);
 
-  assert.deepEqual(data, { hello: "cached" });
+  assert.deepEqual(data, [{ id: 2, name: "cached" }]);
   assert.equal(fetchCalls, 0);
 });
 
 test("cachedFetchJSON refetches once the TTL has expired", async () => {
   const staleTs = Date.now() - 10000;
-  const cached = JSON.stringify({ data: { hello: "stale" }, ts: staleTs });
+  const cached = JSON.stringify({ data: [{ id: 3, name: "stale" }], ts: staleTs });
   const storage = makeStorage({ k: cached });
   let fetchCalls = 0;
   const fetcher = async () => {
     fetchCalls++;
-    return { json: async () => ({ hello: "fresh" }) };
+    return { json: async () => [{ id: 3, name: "fresh" }] };
   };
 
   const data = await cachedFetchJSON("k", "http://x", {}, 1000, storage, fetcher);
 
-  assert.deepEqual(data, { hello: "fresh" });
+  assert.deepEqual(data, [{ id: 3, name: "fresh" }]);
   assert.equal(fetchCalls, 1);
 });
 
@@ -68,11 +68,26 @@ test("cachedFetchJSON falls back to a real fetch when the cached entry is corrup
   let fetchCalls = 0;
   const fetcher = async () => {
     fetchCalls++;
-    return { json: async () => ({ hello: "recovered" }) };
+    return { json: async () => [{ id: 4, name: "recovered" }] };
   };
 
   const data = await cachedFetchJSON("k", "http://x", {}, 60000, storage, fetcher);
 
-  assert.deepEqual(data, { hello: "recovered" });
+  assert.deepEqual(data, [{ id: 4, name: "recovered" }]);
   assert.equal(fetchCalls, 1);
+});
+
+test("cachedFetchJSON does not cache non-array error responses", async () => {
+  const storage = makeStorage();
+  let fetchCalls = 0;
+  const fetcher = async () => {
+    fetchCalls++;
+    return { json: async () => ({ message: "JWT expired" }) };
+  };
+
+  const data = await cachedFetchJSON("k", "http://x", {}, 60000, storage, fetcher);
+
+  assert.deepEqual(data, { message: "JWT expired" });
+  assert.equal(fetchCalls, 1);
+  assert.equal(storage._store["k"], undefined, "error response should not be cached");
 });

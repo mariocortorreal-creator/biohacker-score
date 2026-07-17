@@ -2003,14 +2003,16 @@ function cachedFetchJSON(cacheKey, url, headers, ttlMs = STATIC_CACHE_TTL_MS, st
             }
         }
     }
-    catch (e) {
+    catch {
         // corrupted or unavailable cache entry (e.g. private browsing) — fall through to a real fetch
     }
     return fetcher(url, { headers }).then((res) => res.json()).then((data) => {
         try {
-            storage.setItem(cacheKey, JSON.stringify({ data, ts: Date.now() }));
+            if (Array.isArray(data)) {
+                storage.setItem(cacheKey, JSON.stringify({ data, ts: Date.now() }));
+            }
         }
-        catch (e) {
+        catch {
             // storage full/unavailable — cache is best-effort, not required for correctness
         }
         return data;
