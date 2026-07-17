@@ -579,7 +579,11 @@ function MacroCalculatorCard({ weightDraft, onWeightChange, onSave, saving, macr
     const weightInputRow = React.createElement("div", { className: "flex items-end gap-2 mb-4" },
         React.createElement("label", { className: "flex-1" },
             React.createElement("div", { className: "text-xs text-slate-400 mb-1" }, "Peso corporal (kg)"),
-            React.createElement("input", { type: "number", step: "0.5", min: "0", value: weightDraft !== null && weightDraft !== void 0 ? weightDraft : "", onChange: (e) => onWeightChange(e.target.value === "" ? null : parseFloat(e.target.value)), className: "w-full bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
+            React.createElement("input", { type: "number", step: "0.5", min: "20", max: "400", value: weightDraft !== null && weightDraft !== void 0 ? weightDraft : "", onChange: (e) => {
+                    if (e.target.value === "") { onWeightChange(null); return; }
+                    const parsed = parseFloat(e.target.value);
+                    onWeightChange(Number.isFinite(parsed) ? Math.min(400, Math.max(20, parsed)) : null);
+                }, className: "w-full bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
         React.createElement("button", { type: "button", onClick: onSave, disabled: saving || !weightDraft, className: "shrink-0 flex items-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-4 py-2 hover:brightness-110 transition disabled:opacity-40" },
             saving ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : React.createElement(Check, { size: 14 }),
             "Guardar"));
@@ -1173,6 +1177,11 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     const [deleteConfirmText, setDeleteConfirmText] = useState("");
     const [deletingAccount, setDeletingAccount] = useState(false);
     const [deleteAccountError, setDeleteAccountError] = useState("");
+    // Shared banner for the several small mutations below (today's entry, body comp,
+    // weight, goals, food exclusions) that previously failed with only a console.error
+    // and no visible sign anything went wrong — a user with a flaky connection would
+    // believe a save succeeded when it silently didn't.
+    const [actionError, setActionError] = useState("");
     const authHeaders = { apikey: ANON_KEY, Authorization: `Bearer ${session.accessToken}`, "Content-Type": "application/json" };
     useEffect(() => { loadEntries(); loadPlan(); checkCoachStatus(); loadMyRoutineAssignments(); loadExerciseLibrary(); loadSupplements(); loadSubscriptionPlans(); }, []);
     useEffect(() => {
@@ -1474,6 +1483,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         if (!newExclusionName.trim())
             return;
         setAddingExclusion(true);
+        setActionError("");
         try {
             const res = await fetch(`${REST}/client_food_exclusions`, {
                 method: "POST",
@@ -1488,6 +1498,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         }
         catch (e) {
             console.error(e);
+            setActionError("No se pudo agregar la exclusión alimenticia. Intenta de nuevo.");
         }
         finally {
             setAddingExclusion(false);
@@ -1495,6 +1506,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     }
     async function removeFoodExclusion(id) {
         setRemovingExclusionId(id);
+        setActionError("");
         try {
             const res = await fetch(`${REST}/client_food_exclusions?id=eq.${id}`, {
                 method: "DELETE",
@@ -1506,6 +1518,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         }
         catch (e) {
             console.error(e);
+            setActionError("No se pudo quitar la exclusión alimenticia. Intenta de nuevo.");
         }
         finally {
             setRemovingExclusionId(null);
@@ -1575,6 +1588,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         if (!bodyDraft.current || !bodyDraft.target)
             return;
         setSavingBody(true);
+        setActionError("");
         try {
             const res = await fetch(`${REST}/profiles?id=eq.${session.user.id}`, {
                 method: "PATCH",
@@ -1594,6 +1608,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         }
         catch (e) {
             console.error(e);
+            setActionError("No se pudo guardar tu composición corporal. Intenta de nuevo.");
         }
         finally {
             setSavingBody(false);
@@ -1603,6 +1618,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         if (!weightDraft)
             return;
         setSavingWeight(true);
+        setActionError("");
         try {
             const res = await fetch(`${REST}/profiles?id=eq.${session.user.id}`, {
                 method: "PATCH",
@@ -1615,6 +1631,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         }
         catch (e) {
             console.error(e);
+            setActionError("No se pudo guardar tu peso. Intenta de nuevo.");
         }
         finally {
             setSavingWeight(false);
@@ -1622,6 +1639,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     }
     async function saveGoals() {
         setSavingGoals(true);
+        setActionError("");
         try {
             const res = await fetch(`${REST}/profiles?id=eq.${session.user.id}`, {
                 method: "PATCH",
@@ -1640,6 +1658,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         }
         catch (e) {
             console.error(e);
+            setActionError("No se pudieron guardar tus metas. Intenta de nuevo.");
         }
         finally {
             setSavingGoals(false);
@@ -1676,6 +1695,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     async function saveToday() {
         setSaving(true);
         setSaved(false);
+        setActionError("");
         try {
             const payload = {
                 user_id: session.user.id, entry_date: todayStr,
@@ -1697,6 +1717,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         }
         catch (e) {
             console.error(e);
+            setActionError("No se pudo guardar tu registro de hoy. Intenta de nuevo.");
         }
         finally {
             setSaving(false);
@@ -1965,6 +1986,9 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                 React.createElement("button", { onClick: onLogout, className: "text-slate-500 hover:text-slate-200 transition" },
                     React.createElement(LogOut, { size: 16 })))),
         React.createElement("main", { className: "max-w-4xl mx-auto px-6 py-10 space-y-10" },
+            actionError && React.createElement("div", { role: "alert", className: "flex items-center justify-between gap-3 bg-[#FF6B5E]/10 border border-[#FF6B5E]/25 rounded-xl px-4 py-3 text-sm text-[#FF6B5E]" },
+                React.createElement("span", null, actionError),
+                React.createElement("button", { onClick: () => setActionError(""), "aria-label": "Cerrar aviso", className: "text-[#FF6B5E]/70 hover:text-[#FF6B5E] transition shrink-0 text-base leading-none" }, "✕")),
             tabNav,
             activeTab === "inicio" && React.createElement("section", { className: "flex flex-col items-center" },
                 React.createElement(ScoreRing, { categories: categories, total: total }),
@@ -1993,22 +2017,22 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                             React.createElement("div", { className: "flex items-center justify-between gap-2" },
                                 React.createElement("span", null, "Meta de sue\u00F1o (h)"),
                                 React.createElement(SuggestedGoalChip, { value: suggested.sleepHours, unit: "h", onApply: () => setGoalsDraft({ ...goalsDraft, sleepHours: suggested.sleepHours }) })),
-                            React.createElement("input", { type: "number", step: "0.5", value: goalsDraft.sleepHours, onChange: (e) => setGoalsDraft({ ...goalsDraft, sleepHours: parseFloat(e.target.value) || 0 }), className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
+                            React.createElement("input", { type: "number", step: "0.5", min: "1", max: "16", value: goalsDraft.sleepHours, onChange: (e) => setGoalsDraft({ ...goalsDraft, sleepHours: Math.min(16, Math.max(1, parseFloat(e.target.value) || 0)) }), className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
                         React.createElement("label", { className: "text-xs text-slate-400" },
                             React.createElement("div", { className: "flex items-center justify-between gap-2" },
                                 React.createElement("span", null, "Meta de ayuno (h)"),
                                 React.createElement(SuggestedGoalChip, { value: suggested.fastingHours, unit: "h", onApply: () => setGoalsDraft({ ...goalsDraft, fastingHours: suggested.fastingHours }) })),
-                            React.createElement("input", { type: "number", step: "0.5", value: goalsDraft.fastingHours, onChange: (e) => setGoalsDraft({ ...goalsDraft, fastingHours: parseFloat(e.target.value) || 0 }), className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
+                            React.createElement("input", { type: "number", step: "0.5", min: "0", max: "24", value: goalsDraft.fastingHours, onChange: (e) => setGoalsDraft({ ...goalsDraft, fastingHours: Math.min(24, Math.max(0, parseFloat(e.target.value) || 0)) }), className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
                         React.createElement("label", { className: "text-xs text-slate-400" },
                             React.createElement("div", { className: "flex items-center justify-between gap-2" },
                                 React.createElement("span", null, "Meta de ejercicio (min)"),
                                 React.createElement(SuggestedGoalChip, { value: suggested.exerciseMinutes, unit: "min", onApply: () => setGoalsDraft({ ...goalsDraft, exerciseMinutes: suggested.exerciseMinutes }) })),
-                            React.createElement("input", { type: "number", step: "5", value: goalsDraft.exerciseMinutes, onChange: (e) => setGoalsDraft({ ...goalsDraft, exerciseMinutes: parseFloat(e.target.value) || 0 }), className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
+                            React.createElement("input", { type: "number", step: "5", min: "0", max: "300", value: goalsDraft.exerciseMinutes, onChange: (e) => setGoalsDraft({ ...goalsDraft, exerciseMinutes: Math.min(300, Math.max(0, parseFloat(e.target.value) || 0)) }), className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
                         React.createElement("label", { className: "text-xs text-slate-400" },
                             React.createElement("div", { className: "flex items-center justify-between gap-2" },
                                 React.createElement("span", null, "Tope de estr\u00E9s (1-9)"),
                                 React.createElement(SuggestedGoalChip, { value: suggested.stressMax, unit: "", onApply: () => setGoalsDraft({ ...goalsDraft, stressMax: suggested.stressMax }) })),
-                            React.createElement("input", { type: "number", step: "1", min: "1", max: "9", value: goalsDraft.stressMax, onChange: (e) => setGoalsDraft({ ...goalsDraft, stressMax: parseFloat(e.target.value) || 0 }), className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" }))),
+                            React.createElement("input", { type: "number", step: "1", min: "1", max: "9", value: goalsDraft.stressMax, onChange: (e) => setGoalsDraft({ ...goalsDraft, stressMax: Math.min(9, Math.max(1, parseFloat(e.target.value) || 0)) }), className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" }))),
                     React.createElement("button", { onClick: saveGoals, disabled: savingGoals, className: "flex items-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-5 py-2 hover:brightness-110 transition disabled:opacity-50" },
                         savingGoals ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : React.createElement(Check, { size: 14 }),
                         "Guardar metas"))) : (React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-4 gap-3" },
