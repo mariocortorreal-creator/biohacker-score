@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { calculateMacroTargets } from "../_shared/diet-macros.mjs";
+import { parseMealPlanJSON, buildQuotaExceededPayload as buildQuotaExceededPayloadPure } from "../_shared/diet-plan-helpers.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -62,19 +63,7 @@ async function buildQuotaExceededPayload(clientId: string, usedThisMonth: number
     `subscription_plans?select=tier,display_name,price_usd,monthly_diet_quota&order=price_usd.asc`
   );
   const profileRows = await sbGet(`profiles?id=eq.${clientId}&select=subscription_tier,premium_source`);
-  const p = profileRows?.[0];
-  const currentTier = p?.subscription_tier ?? (p?.premium_source === "comp_trainer" ? "elite" : "basico");
-  const idx = plans.findIndex((pl: any) => pl.tier === currentTier);
-  const next = idx >= 0 ? plans[idx + 1] : null;
-  return {
-    quota_exceeded: true,
-    current_tier: currentTier,
-    used_this_month: usedThisMonth,
-    quota,
-    next_tier: next?.tier ?? null,
-    next_tier_display_name: next?.display_name ?? null,
-    next_tier_price: next?.price_usd ?? null,
-  };
+  return buildQuotaExceededPayloadPure(plans, profileRows?.[0], usedThisMonth, quota);
 }
 
 function json(body: unknown, status = 200) {
@@ -199,13 +188,7 @@ Responde ÚNICAMENTE con un objeto JSON. Sin markdown, sin explicaciones, sin ra
 
     let mealPlan: unknown;
     try {
-      let cleaned = (textBlock?.text ?? "").replace(/```json|```/g, "").trim();
-      const firstBrace = cleaned.indexOf("{");
-      const lastBrace = cleaned.lastIndexOf("}");
-      if (firstBrace >= 0 && lastBrace > firstBrace) {
-        cleaned = cleaned.slice(firstBrace, lastBrace + 1);
-      }
-      mealPlan = JSON.parse(cleaned);
+      mealPlan = parseMealPlanJSON(textBlock?.text);
     } catch (parseErr) {
       console.error("Failed to parse Claude output as JSON:", parseErr, "raw text:", textBlock?.text);
       return json({ error: "invalid_generation_output" }, 502);
