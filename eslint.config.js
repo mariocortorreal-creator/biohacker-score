@@ -77,6 +77,7 @@ module.exports = [
         ...globals.browser,
         React: "readonly",
         ReactDOM: "readonly",
+        THREE: "readonly", // three.js UMD CDN script (mitochondria pulse loading screen)
         dataLayer: "writable", // GA4 gtag.js snippet
       },
     },
