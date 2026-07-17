@@ -23,7 +23,14 @@ const COACH_PRICE_CENTS = 2000;
 // plan above), so tier is matched by exact charged amount, same as the coach detection.
 const TIER_AMOUNTS_CENTS: Record<string, number> = { basico: 799, pro: 1400, elite: 1900 };
 
-async function updateProfile(filterColumn: string, filterValue: string, patch: Record<string, unknown>) {
+// Returns whether the update succeeded, so the caller can return a non-2xx status and
+// let Stripe retry delivery — logging alone isn't enough, an update failure must
+// actually surface as a failed webhook response (same pattern as revenuecat-webhook).
+async function updateProfile(
+  filterColumn: string,
+  filterValue: string,
+  patch: Record<string, unknown>
+): Promise<boolean> {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?${filterColumn}=eq.${filterValue}`, {
     method: "PATCH",
     headers: {
@@ -36,7 +43,9 @@ async function updateProfile(filterColumn: string, filterValue: string, patch: R
   });
   if (!res.ok) {
     console.error("Failed to update profile:", await res.text());
+    return false;
   }
+  return true;
 }
 
 // Coach-plan equivalent of updateProfile. Patches `coaches` instead of `profiles`, and
@@ -46,12 +55,16 @@ async function updateProfile(filterColumn: string, filterValue: string, patch: R
 //     trigger fired) — Mario needs to review the cap before this coach can go active.
 //   - COACH_ROW_NOT_FOUND: the checkout matched no existing `coaches` row — coach signup
 //     is manual, so this means the row wasn't created before the coach paid.
+// Returns whether the write itself succeeded (res.ok) — the caller returns a non-2xx
+// status so Stripe retries. COACH_ROW_NOT_FOUND is deliberately NOT treated as a failure
+// here: the write succeeded, it just matched no row, which is an expected state given
+// manual coach signup (see comment below) rather than something a retry would fix.
 async function updateCoach(
   filterColumn: string,
   filterValue: string,
   patch: Record<string, unknown>,
   context: string
-) {
+): Promise<boolean> {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/coaches?${filterColumn}=eq.${filterValue}`, {
     method: "PATCH",
     headers: {
@@ -70,7 +83,7 @@ async function updateCoach(
       `COACH_ACTIVATION_BLOCKED (${context}): failed to update coaches where ${filterColumn}=${filterValue}. ` +
         `Supabase responded ${res.status}: ${text}. Check the 50-active-coach cap and this coach's row manually.`
     );
-    return;
+    return false;
   }
 
   let rows: unknown[] = [];
@@ -86,6 +99,8 @@ async function updateCoach(
         `Coach signup is manual — make sure the coaches row is created before sending them the Payment Link.`
     );
   }
+
+  return true;
 }
 
 async function tierForPriceId(priceId: string): Promise<string | null> {
@@ -117,6 +132,12 @@ Deno.serve(async (req: Request) => {
 
   const event = JSON.parse(rawBody);
 
+  // Tracks whether every DB write this event triggered actually succeeded. A false here
+  // must turn into a non-2xx response below — logging alone previously let a failed
+  // profiles/coaches PATCH pass silently with a 200, so Stripe never retried and a paying
+  // client could end up permanently stuck without premium.
+  let updateOk = true;
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
@@ -129,7 +150,7 @@ Deno.serve(async (req: Request) => {
 
         if (resolved?.type === "coach") {
           if (userId) {
-            await updateCoach(
+            updateOk = await updateCoach(
               "id",
               userId,
               {
@@ -146,7 +167,7 @@ Deno.serve(async (req: Request) => {
           // actually unlocks access; the old code only set the legacy `plan` display
           // column here, which meant a real paying customer never got premium (never hit
           // production since nobody had completed this checkout yet).
-          await updateProfile("id", userId, {
+          updateOk = await updateProfile("id", userId, {
             plan: "premium",
             premium_source: "paid",
             subscription_tier: resolved.tier,
@@ -168,7 +189,7 @@ Deno.serve(async (req: Request) => {
         if (priceId === COACH_PRICE_ID) {
           const coachStatus = mapStripeStatusToCoachStatus(sub.status);
           if (coachStatus) {
-            await updateCoach(
+            updateOk = await updateCoach(
               "stripe_customer_id",
               sub.customer,
               { status: coachStatus },
@@ -179,7 +200,7 @@ Deno.serve(async (req: Request) => {
           const tier = priceId ? await tierForPriceId(priceId) : null;
           const isActive = ["active", "trialing"].includes(sub.status);
           if (tier) {
-            await updateProfile("stripe_customer_id", sub.customer, isActive
+            updateOk = await updateProfile("stripe_customer_id", sub.customer, isActive
               ? { plan: "premium", premium_source: "paid", subscription_tier: tier }
               : { plan: "free", premium_source: null });
           } else {
@@ -195,14 +216,14 @@ Deno.serve(async (req: Request) => {
         const priceId = sub.items?.data?.[0]?.price?.id;
 
         if (priceId === COACH_PRICE_ID) {
-          await updateCoach(
+          updateOk = await updateCoach(
             "stripe_customer_id",
             sub.customer,
             { status: "canceled" },
             "customer.subscription.deleted"
           );
         } else {
-          await updateProfile("stripe_customer_id", sub.customer, { plan: "free", premium_source: null });
+          updateOk = await updateProfile("stripe_customer_id", sub.customer, { plan: "free", premium_source: null });
         }
         break;
       }
@@ -212,6 +233,10 @@ Deno.serve(async (req: Request) => {
   } catch (err) {
     console.error("Webhook handling error:", err);
     return new Response("Internal error", { status: 500 });
+  }
+
+  if (!updateOk) {
+    return new Response("Failed to update profile or coach record", { status: 500 });
   }
 
   return new Response(JSON.stringify({ received: true }), {
