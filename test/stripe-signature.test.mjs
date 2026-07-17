@@ -19,9 +19,9 @@ async function signPayload(rawBody, secret, timestamp) {
     .join("");
 }
 
-test("verifyStripeSignature accepts a correctly signed payload", async () => {
+test("verifyStripeSignature accepts a correctly signed payload with a fresh timestamp", async () => {
   const rawBody = JSON.stringify({ type: "checkout.session.completed" });
-  const timestamp = "1700000000";
+  const timestamp = String(Math.floor(Date.now() / 1000));
   const signature = await signPayload(rawBody, SECRET, timestamp);
   const header = `t=${timestamp},v1=${signature}`;
 
@@ -30,7 +30,7 @@ test("verifyStripeSignature accepts a correctly signed payload", async () => {
 
 test("verifyStripeSignature rejects a payload signed with a different secret", async () => {
   const rawBody = JSON.stringify({ type: "checkout.session.completed" });
-  const timestamp = "1700000000";
+  const timestamp = String(Math.floor(Date.now() / 1000));
   const signature = await signPayload(rawBody, "whsec_wrong_secret", timestamp);
   const header = `t=${timestamp},v1=${signature}`;
 
@@ -38,7 +38,7 @@ test("verifyStripeSignature rejects a payload signed with a different secret", a
 });
 
 test("verifyStripeSignature rejects a tampered body", async () => {
-  const timestamp = "1700000000";
+  const timestamp = String(Math.floor(Date.now() / 1000));
   const signature = await signPayload(JSON.stringify({ amount: 100 }), SECRET, timestamp);
   const header = `t=${timestamp},v1=${signature}`;
 
@@ -50,7 +50,37 @@ test("verifyStripeSignature rejects a tampered body", async () => {
 
 test("verifyStripeSignature rejects a missing or malformed header", async () => {
   const rawBody = JSON.stringify({ type: "checkout.session.completed" });
+  const fresh = String(Math.floor(Date.now() / 1000));
   assert.equal(await verifyStripeSignature(rawBody, "", SECRET), false);
   assert.equal(await verifyStripeSignature(rawBody, "garbage-header", SECRET), false);
-  assert.equal(await verifyStripeSignature(rawBody, "t=1700000000", SECRET), false);
+  assert.equal(await verifyStripeSignature(rawBody, `t=${fresh}`, SECRET), false);
+});
+
+test("verifyStripeSignature rejects a validly-signed but stale timestamp (replay protection)", async () => {
+  // A real, correctly-signed payload from 10 minutes ago — simulates an attacker
+  // replaying a captured (rawBody, signature) pair well past Stripe's 5-minute window.
+  const rawBody = JSON.stringify({ type: "checkout.session.completed" });
+  const staleTimestamp = String(Math.floor(Date.now() / 1000) - 600);
+  const signature = await signPayload(rawBody, SECRET, staleTimestamp);
+  const header = `t=${staleTimestamp},v1=${signature}`;
+
+  assert.equal(await verifyStripeSignature(rawBody, header, SECRET), false);
+});
+
+test("verifyStripeSignature accepts a timestamp just inside the tolerance window", async () => {
+  const rawBody = JSON.stringify({ type: "checkout.session.completed" });
+  const timestamp = String(Math.floor(Date.now() / 1000) - 290);
+  const signature = await signPayload(rawBody, SECRET, timestamp);
+  const header = `t=${timestamp},v1=${signature}`;
+
+  assert.equal(await verifyStripeSignature(rawBody, header, SECRET), true);
+});
+
+test("verifyStripeSignature respects a custom toleranceSeconds override", async () => {
+  const rawBody = JSON.stringify({ type: "checkout.session.completed" });
+  const timestamp = String(Math.floor(Date.now() / 1000) - 30);
+  const signature = await signPayload(rawBody, SECRET, timestamp);
+  const header = `t=${timestamp},v1=${signature}`;
+
+  assert.equal(await verifyStripeSignature(rawBody, header, SECRET, 10), false);
 });
