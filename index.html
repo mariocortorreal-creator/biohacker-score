@@ -1988,10 +1988,9 @@ async function refreshSession(refreshToken) {
 // ~1000 concurrent users that's redundant read traffic against Postgres for
 // content that didn't change. cachedFetchJSON wraps a GET with a
 // localStorage-backed TTL cache so repeat loads within the TTL skip the
-// network call entirely. Matches this file's existing convention of not
-// checking res.ok on these GETs (see loadSupplements etc.) — a non-2xx
-// response gets cached as-is, same practical outcome as today since callers
-// only ever check Array.isArray(data) on the result.
+// network call entirely. Only Array.isArray(data) responses are cached, so
+// a transient error response (e.g. an expired token) is never persisted and
+// self-corrects on the next load instead of getting replayed for the TTL.
 const STATIC_CACHE_TTL_MS = 15 * 60 * 1000;
 function cachedFetchJSON(cacheKey, url, headers, ttlMs = STATIC_CACHE_TTL_MS, storage = window.localStorage, fetcher = window.fetch) {
     try {
