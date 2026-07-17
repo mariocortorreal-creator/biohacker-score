@@ -1056,8 +1056,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     async function loadExerciseLibrary() {
         setLoadingExerciseLibrary(true);
         try {
-            const res = await fetch(`${REST}/exercises?select=id,name,muscle_group,equipment,instructions,video_url,difficulty_level&order=difficulty_level.asc,muscle_group.asc,name.asc`, { headers: authHeaders });
-            const data = await res.json();
+            const data = await cachedFetchJSON("cache_exercises", `${REST}/exercises?select=id,name,muscle_group,equipment,instructions,video_url,difficulty_level&order=difficulty_level.asc,muscle_group.asc,name.asc`, authHeaders);
             setExerciseLibrary(Array.isArray(data) ? data : []);
         }
         catch (e) {
@@ -1232,8 +1231,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         // Suplementos is fully open (free, trial, any plan) — loaded unconditionally,
         // independent of isPremium, unlike loadPremiumContent below.
         try {
-            const res = await fetch(`${REST}/supplement_recommendations?select=*&order=display_order.asc`, { headers: authHeaders });
-            const data = await res.json();
+            const data = await cachedFetchJSON("cache_supplement_recommendations", `${REST}/supplement_recommendations?select=*&order=display_order.asc`, authHeaders);
             setSupplementRecs(Array.isArray(data) ? data : []);
         }
         catch (e) {
@@ -1243,8 +1241,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     async function loadPremiumContent() {
         setLoadingPremiumContent(true);
         try {
-            const res = await fetch(`${REST}/nutrition_recommendations?select=*&order=display_order.asc`, { headers: authHeaders });
-            const data = await res.json();
+            const data = await cachedFetchJSON("cache_nutrition_recommendations", `${REST}/nutrition_recommendations?select=*&order=display_order.asc`, authHeaders);
             setNutritionRecs(Array.isArray(data) ? data : []);
         }
         catch (e) {
@@ -1260,8 +1257,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     // isPremium — see the plain useEffect below.
     async function loadSubscriptionPlans() {
         try {
-            const res = await fetch(`${REST}/subscription_plans?select=*&order=price_usd.asc`, { headers: authHeaders });
-            const data = await res.json();
+            const data = await cachedFetchJSON("cache_subscription_plans", `${REST}/subscription_plans?select=*&order=price_usd.asc`, authHeaders);
             setSubscriptionPlans(Array.isArray(data) ? data : []);
         }
         catch (e) {
@@ -1984,6 +1980,43 @@ async function refreshSession(refreshToken) {
         throw new Error(data.error_description || data.msg || "Sesión expirada.");
     return { accessToken: data.access_token, refreshToken: data.refresh_token, user: data.user };
 }
+// ---------- Static content cache ----------
+// Coach-curated reference data (exercises, supplement_recommendations,
+// nutrition_recommendations, subscription_plans) is identical for every user
+// (RLS lets any authenticated user read all of it) and rarely changes, but
+// Dashboard's mount effect re-fetches all four on every login/page load. At
+// ~1000 concurrent users that's redundant read traffic against Postgres for
+// content that didn't change. cachedFetchJSON wraps a GET with a
+// localStorage-backed TTL cache so repeat loads within the TTL skip the
+// network call entirely. Matches this file's existing convention of not
+// checking res.ok on these GETs (see loadSupplements etc.) — a non-2xx
+// response gets cached as-is, same practical outcome as today since callers
+// only ever check Array.isArray(data) on the result.
+const STATIC_CACHE_TTL_MS = 15 * 60 * 1000;
+function cachedFetchJSON(cacheKey, url, headers, ttlMs = STATIC_CACHE_TTL_MS, storage = window.localStorage, fetcher = window.fetch) {
+    try {
+        const raw = storage.getItem(cacheKey);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed.ts === "number" && Date.now() - parsed.ts < ttlMs) {
+                return Promise.resolve(parsed.data);
+            }
+        }
+    }
+    catch (e) {
+        // corrupted or unavailable cache entry (e.g. private browsing) — fall through to a real fetch
+    }
+    return fetcher(url, { headers }).then((res) => res.json()).then((data) => {
+        try {
+            storage.setItem(cacheKey, JSON.stringify({ data, ts: Date.now() }));
+        }
+        catch (e) {
+            // storage full/unavailable — cache is best-effort, not required for correctness
+        }
+        return data;
+    });
+}
+// ---------- End static content cache ----------
 function App() {
     const [session, setSession] = useState(null);
     const [restoring, setRestoring] = useState(true);
