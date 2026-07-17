@@ -91,3 +91,21 @@ test("cachedFetchJSON does not cache non-array error responses", async () => {
   assert.equal(fetchCalls, 1);
   assert.equal(storage._store["k"], undefined, "error response should not be cached");
 });
+
+test("cachedFetchJSON rejects with a status-401 error instead of returning the error body as data", async () => {
+  // A stale/expired access token — PostgREST returns 401 with a JSON error body, not
+  // an array. Previously this fell through the same Array.isArray guard as any other
+  // error and was silently swallowed by the caller; callers now need to distinguish
+  // "unauthorized" (log the user out) from "some other fetch error" (just log it).
+  const storage = makeStorage();
+  const fetcher = async () => ({
+    status: 401,
+    json: async () => ({ message: "JWT expired" }),
+  });
+
+  await assert.rejects(
+    () => cachedFetchJSON("k", "http://x", {}, 60000, storage, fetcher),
+    (err) => err.status === 401
+  );
+  assert.equal(storage._store["k"], undefined, "a 401 response should not be cached");
+});

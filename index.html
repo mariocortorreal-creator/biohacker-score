@@ -1188,6 +1188,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     async function checkCoachStatus() {
         try {
             const res = await fetch(`${REST}/coaches?id=eq.${session.user.id}&select=business_name`, { headers: authHeaders });
+            if (res.status === 401) { onLogout(); return; }
             const data = await res.json();
             if (Array.isArray(data) && data[0]) {
                 setIsCoach(true);
@@ -1201,6 +1202,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     async function loadMyRoutineAssignments() {
         try {
             const res = await fetch(`${REST}/routine_assignments?client_id=eq.${session.user.id}&select=id,assigned_at,notes,routines(title,description,content)`, { headers: authHeaders });
+            if (res.status === 401) { onLogout(); return; }
             const data = await res.json();
             setMyRoutineAssignments(Array.isArray(data) ? data : []);
         }
@@ -1215,6 +1217,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             setExerciseLibrary(Array.isArray(data) ? data : []);
         }
         catch (e) {
+            if (e.status === 401) { onLogout(); return; }
             console.error(e);
         }
         finally {
@@ -1230,6 +1233,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                 fetch(`${REST}/routine_assignments?select=id,routine_id,client_id`, { headers: authHeaders }),
                 fetch(`${REST}/routine_templates?is_public=eq.true&select=id,title,description,content`, { headers: authHeaders }),
             ]);
+            if ([clientsRes, routinesRes, assignmentsRes, templatesRes].some((r) => r.status === 401)) { onLogout(); return; }
             const [clientsData, routinesData, assignmentsData, templatesData] = await Promise.all([
                 clientsRes.json(), routinesRes.json(), assignmentsRes.json(), templatesRes.json(),
             ]);
@@ -1334,6 +1338,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         setCheckingPlan(true);
         try {
             const res = await fetch(`${REST}/profiles?id=eq.${session.user.id}&select=goal_sleep_hours,goal_fasting_hours,goal_exercise_minutes,goal_stress_max,body_gender,body_current_stage,body_target_stage,weight_kg,premium_source,trial_ends_at,age,height_cm,activity_level,nutrition_goal,subscription_tier`, { headers: authHeaders });
+            if (res.status === 401) { onLogout(); return; }
             const data = await res.json();
             if (Array.isArray(data) && data[0]) {
                 setPremiumSource(data[0].premium_source || null);
@@ -1371,12 +1376,17 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                 headers: authHeaders,
                 body: JSON.stringify({ profile_id: session.user.id }),
             });
+            if (premRes.status === 401) { onLogout(); return; }
             const premData = await premRes.json();
             setIsPremium(premData === true);
         }
         catch (e) {
+            // Deliberately does NOT setIsPremium(false) here: this only runs for network
+            // failures / unexpected shapes (401s already returned above via onLogout), and
+            // a paying premium user hitting a transient error shouldn't get bumped to the
+            // free-tier paywall — better to keep showing their last known plan status and
+            // let the next successful loadPlan() correct it than to punish flaky wifi.
             console.error(e);
-            setIsPremium(false);
         }
         finally {
             setCheckingPlan(false);
@@ -1390,6 +1400,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             setSupplementRecs(Array.isArray(data) ? data : []);
         }
         catch (e) {
+            if (e.status === 401) { onLogout(); return; }
             console.error(e);
         }
     }
@@ -1400,6 +1411,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             setNutritionRecs(Array.isArray(data) ? data : []);
         }
         catch (e) {
+            if (e.status === 401) { onLogout(); return; }
             console.error(e);
         }
         finally {
@@ -1416,6 +1428,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             setSubscriptionPlans(Array.isArray(data) ? data : []);
         }
         catch (e) {
+            if (e.status === 401) { onLogout(); return; }
             console.error(e);
         }
     }
@@ -1426,6 +1439,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                 fetch(`${REST}/client_food_exclusions?client_id=eq.${session.user.id}&select=*&order=created_at.asc`, { headers: authHeaders }),
                 fetch(`${REST}/diet_plans?client_id=eq.${session.user.id}&select=*&order=generated_at.desc`, { headers: authHeaders }),
             ]);
+            if ([exclRes, dietsRes].some((r) => r.status === 401)) { onLogout(); return; }
             const [exclData, dietsData] = await Promise.all([exclRes.json(), dietsRes.json()]);
             setFoodExclusions(Array.isArray(exclData) ? exclData : []);
             setDietPlans(Array.isArray(dietsData) ? dietsData : []);
@@ -1636,6 +1650,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         setLoadingEntries(true);
         try {
             const res = await fetch(`${REST}/daily_entries?user_id=eq.${session.user.id}&order=entry_date.asc&limit=60`, { headers: authHeaders });
+            if (res.status === 401) { onLogout(); return; }
             const data = await res.json();
             if (Array.isArray(data)) {
                 setEntries(data);
@@ -2160,7 +2175,14 @@ function cachedFetchJSON(cacheKey, url, headers, ttlMs = STATIC_CACHE_TTL_MS, st
     catch {
         // corrupted or unavailable cache entry (e.g. private browsing) — fall through to a real fetch
     }
-    return fetcher(url, { headers }).then((res) => res.json()).then((data) => {
+    return fetcher(url, { headers }).then((res) => {
+        if (res.status === 401) {
+            const err = new Error("unauthorized");
+            err.status = 401;
+            throw err;
+        }
+        return res.json();
+    }).then((data) => {
         try {
             if (Array.isArray(data)) {
                 storage.setItem(cacheKey, JSON.stringify({ data, ts: Date.now() }));
@@ -2220,7 +2242,13 @@ function App() {
                 setSession(fresh);
             }
             catch (e) {
+                // A failed silent refresh (e.g. the refresh token was already rotated by
+                // another tab/device) previously just logged and left the app running on
+                // a soon-to-expire access token — every subsequent Dashboard fetch would
+                // then start 401ing with no explanation. Log out instead so the app falls
+                // back to AuthScreen and the user can sign in again.
                 console.error("Refresh silencioso falló:", e);
+                handleLogout();
             }
         } }))));
 }
