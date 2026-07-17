@@ -17,6 +17,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
   body { background:#060809; font-family:'Inter', system-ui, sans-serif; }
   .font-display { font-family:'Space Grotesk', sans-serif; }
@@ -138,6 +139,92 @@ function initAuthParticles(canvas, count) {
         window.removeEventListener("resize", size);
         cancelAnimationFrame(rafId);
     };
+}
+// ---------- Session-restore loading screen: mitochondria pulse ----------
+// This is the single most-repeated screen in the app (every session restore, every
+// platform), so a broken Three.js load must never leave the user with nothing visible.
+// canMountMitoLoader is computed once, synchronously, from two checks: the CDN script
+// actually defined `window.THREE` (it may not have — network failure, wrong URL, ad
+// blocker), and this browser/WebView actually supports a WebGL context (a real gap on
+// some older Android System WebViews). If either check fails, App renders the existing
+// plain Loader2 spinner instead — exactly what it did before this feature existed.
+function hasWebGL() {
+    try {
+        const canvas = document.createElement("canvas");
+        return !!(window.WebGLRenderingContext && (canvas.getContext("webgl") || canvas.getContext("experimental-webgl")));
+    } catch (e) {
+        return false;
+    }
+}
+const canMountMitoLoader = typeof window !== "undefined" && typeof THREE !== "undefined" && hasWebGL();
+
+function MitoLoader() {
+    const canvasRef = useRef(null);
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const size = 120;
+        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(size, size, false);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10);
+        camera.position.z = 3;
+
+        // Deformed icosahedron: an abstract organic pulse, not an anatomically literal
+        // mitochondria render. detail=2 keeps this low-poly (~320 triangles) since it
+        // renders on every app open, including on older Android WebViews.
+        const geometry = new THREE.IcosahedronGeometry(1, 2);
+        const posAttr = geometry.attributes.position;
+        const v = new THREE.Vector3();
+        for (let i = 0; i < posAttr.count; i++) {
+            v.fromBufferAttribute(posAttr, i);
+            const noise = Math.sin(v.x * 4) * Math.cos(v.y * 4) * Math.sin(v.z * 4) * 0.15;
+            v.normalize().multiplyScalar(1 + noise);
+            posAttr.setXYZ(i, v.x, v.y, v.z);
+        }
+        posAttr.needsUpdate = true;
+        geometry.computeVertexNormals();
+
+        const material = new THREE.MeshStandardMaterial({
+            color: 0x0c2b33,
+            emissive: 0x3ddcff,
+            emissiveIntensity: 0.6,
+            metalness: 0.2,
+            roughness: 0.4,
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+        scene.add(new THREE.AmbientLight(0x3ddcff, 0.3));
+        const pointLight = new THREE.PointLight(0x3ddcff, 1.2);
+        pointLight.position.set(2, 2, 2);
+        scene.add(pointLight);
+
+        const clock = new THREE.Clock();
+        let rafId;
+        function animate() {
+            const t = clock.getElapsedTime();
+            mesh.rotation.y = t * 0.4;
+            mesh.rotation.x = Math.sin(t * 0.3) * 0.15;
+            material.emissiveIntensity = 0.5 + Math.sin(t * 2.2) * 0.35;
+            renderer.render(scene, camera);
+            rafId = requestAnimationFrame(animate);
+        }
+        animate();
+
+        // Same cleanup discipline as initAuthParticles above: this screen unmounts as
+        // soon as session restore finishes, which can be near-instant, so an
+        // uncancelled rAF loop + undisposed WebGL resources would otherwise leak on
+        // every single app open.
+        return () => {
+            cancelAnimationFrame(rafId);
+            geometry.dispose();
+            material.dispose();
+            renderer.dispose();
+        };
+    }, []);
+    return React.createElement("canvas", { ref: canvasRef, width: 120, height: 120, style: { width: 120, height: 120 } });
 }
 // ---------- Icons (inline, no external icon lib) ----------
 function Icon({ children, size = 18, className = "", style = {} }) {
@@ -2126,7 +2213,7 @@ function App() {
     function handleAuthed(s) { persistSession(s); setSession(s); }
     function handleLogout() { localStorage.removeItem(SESSION_KEY); setSession(null); }
     return (React.createElement(React.Fragment, null, restoring ? (React.createElement("div", { className: "min-h-screen bg-[#060809] flex items-center justify-center" },
-        React.createElement(Loader2, { size: 22, className: "animate-spin text-[#3DDCFF]" }))) : !session ? (React.createElement(AuthScreen, { onAuthed: handleAuthed })) : (React.createElement(Dashboard, { session: session, onLogout: handleLogout, onRefreshSession: async () => {
+        canMountMitoLoader ? React.createElement(MitoLoader, null) : React.createElement(Loader2, { size: 22, className: "animate-spin text-[#3DDCFF]" }))) : !session ? (React.createElement(AuthScreen, { onAuthed: handleAuthed })) : (React.createElement(Dashboard, { session: session, onLogout: handleLogout, onRefreshSession: async () => {
             try {
                 const fresh = await refreshSession(session.refreshToken);
                 persistSession(fresh);
