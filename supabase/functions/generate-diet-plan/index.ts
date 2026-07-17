@@ -186,14 +186,14 @@ Responde ÚNICAMENTE con un objeto JSON. Sin markdown, sin explicaciones, sin ra
     if (!anthropicRes.ok) {
       const errText = await anthropicRes.text();
       console.error("Anthropic API error:", anthropicRes.status, errText);
-      return json({ error: "generation_failed", debug_detail: `status ${anthropicRes.status}: ${errText}`.slice(0, 800) }, 502);
+      return json({ error: "generation_failed" }, 502);
     }
 
     const anthropicData = await anthropicRes.json();
     console.error("Anthropic usage debug:", JSON.stringify({ stop_reason: anthropicData.stop_reason, usage: anthropicData.usage }));
     if (anthropicData.stop_reason === "max_tokens") {
       console.error("Claude output truncated at max_tokens:", JSON.stringify(anthropicData).slice(0, 500));
-      return json({ error: "invalid_generation_output", debug_detail: `truncated at max_tokens, usage: ${JSON.stringify(anthropicData.usage)}` }, 502);
+      return json({ error: "invalid_generation_output" }, 502);
     }
     const textBlock = (anthropicData.content ?? []).find((b: any) => b.type === "text");
 
@@ -208,7 +208,7 @@ Responde ÚNICAMENTE con un objeto JSON. Sin markdown, sin explicaciones, sin ra
       mealPlan = JSON.parse(cleaned);
     } catch (parseErr) {
       console.error("Failed to parse Claude output as JSON:", parseErr, "raw text:", textBlock?.text);
-      return json({ error: "invalid_generation_output", debug_detail: String(textBlock?.text ?? "").slice(0, 800) }, 502);
+      return json({ error: "invalid_generation_output" }, 502);
     }
 
     // 7. Guardar

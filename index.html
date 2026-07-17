@@ -1535,7 +1535,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                 return;
             }
             if (!res.ok || !data.diet_plan) {
-                setDietError((DIET_ERROR_MESSAGES[data.error] || "No se pudo generar tu dieta.") + (data.debug_detail ? ` [DEBUG: ${data.debug_detail}]` : ""));
+                setDietError(DIET_ERROR_MESSAGES[data.error] || "No se pudo generar tu dieta.");
                 return;
             }
             setDietPlans([data.diet_plan, ...dietPlans]);
