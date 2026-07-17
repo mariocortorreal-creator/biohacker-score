@@ -57,6 +57,26 @@ async function sbRpc(fn: string, args: Record<string, unknown>) {
   return res.json();
 }
 
+async function buildQuotaExceededPayload(clientId: string, usedThisMonth: number, quota: number) {
+  const plans = await sbGet(
+    `subscription_plans?select=tier,display_name,price_usd,monthly_diet_quota&order=price_usd.asc`
+  );
+  const profileRows = await sbGet(`profiles?id=eq.${clientId}&select=subscription_tier,premium_source`);
+  const p = profileRows?.[0];
+  const currentTier = p?.subscription_tier ?? (p?.premium_source === "comp_trainer" ? "elite" : "basico");
+  const idx = plans.findIndex((pl: any) => pl.tier === currentTier);
+  const next = idx >= 0 ? plans[idx + 1] : null;
+  return {
+    quota_exceeded: true,
+    current_tier: currentTier,
+    used_this_month: usedThisMonth,
+    quota,
+    next_tier: next?.tier ?? null,
+    next_tier_display_name: next?.display_name ?? null,
+    next_tier_price: next?.price_usd ?? null,
+  };
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -89,26 +109,7 @@ Deno.serve(async (req: Request) => {
     const usedThisMonth = Array.isArray(existing) ? existing.length : 0;
 
     if (usedThisMonth >= quota) {
-      const plans = await sbGet(
-        `subscription_plans?select=tier,display_name,price_usd,monthly_diet_quota&order=price_usd.asc`
-      );
-      const profileRows = await sbGet(`profiles?id=eq.${clientId}&select=subscription_tier,premium_source`);
-      const p = profileRows?.[0];
-      const currentTier = p?.subscription_tier ?? (p?.premium_source === "comp_trainer" ? "elite" : "basico");
-      const idx = plans.findIndex((pl: any) => pl.tier === currentTier);
-      const next = idx >= 0 ? plans[idx + 1] : null;
-      return json(
-        {
-          quota_exceeded: true,
-          current_tier: currentTier,
-          used_this_month: usedThisMonth,
-          quota,
-          next_tier: next?.tier ?? null,
-          next_tier_display_name: next?.display_name ?? null,
-          next_tier_price: next?.price_usd ?? null,
-        },
-        200
-      );
+      return json(await buildQuotaExceededPayload(clientId, usedThisMonth, quota), 200);
     }
 
     // 4. Datos del cliente para la calculadora
@@ -251,7 +252,7 @@ Responde ÚNICAMENTE con un objeto JSON. Sin markdown, sin explicaciones, sin ra
     if (!insertRes.ok) {
       const errBody = await insertRes.text();
       if (errBody.includes("Cuota mensual de planes de alimentación")) {
-        return json({ quota_exceeded: true, used_this_month: usedThisMonth, quota }, 200);
+        return json(await buildQuotaExceededPayload(clientId, usedThisMonth, quota), 200);
       }
       console.error("diet_plans insert failed:", insertRes.status, errBody);
       return json({ error: "internal_error" }, 500);
