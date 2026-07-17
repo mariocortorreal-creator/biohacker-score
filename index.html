@@ -556,7 +556,7 @@ function ScoreRing({ categories, total }) {
             })),
         React.createElement("div", { className: "absolute inset-0 flex flex-col items-center justify-center" },
             React.createElement("span", { className: "font-mono text-5xl font-semibold tracking-tight", style: { color: scoreColor(total) } }, total != null ? Math.round(total) : "--"),
-            React.createElement("span", { className: "text-[11px] uppercase tracking-[0.2em] text-slate-500 mt-1" }, "Score de hoy"))));
+            React.createElement("span", { className: "text-[11px] uppercase tracking-[0.2em] text-slate-400 mt-1" }, "Score de hoy"))));
 }
 function FieldSlider({ icon: IconCmp, label, unit, value, onChange, min, max, step, color }) {
     return (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
@@ -566,8 +566,8 @@ function FieldSlider({ icon: IconCmp, label, unit, value, onChange, min, max, st
                 React.createElement("span", { className: "text-sm text-slate-300" }, label)),
             React.createElement("span", { className: "font-mono text-sm text-slate-100" }, value !== null && value !== void 0 ? value : "--",
                 " ",
-                React.createElement("span", { className: "text-slate-500" }, unit))),
-        React.createElement("input", { type: "range", min: min, max: max, step: step, value: value !== null && value !== void 0 ? value : min, onChange: (e) => onChange(parseFloat(e.target.value)), className: "w-full", style: { accentColor: color, color } })));
+                React.createElement("span", { className: "text-slate-400" }, unit))),
+        React.createElement("input", { type: "range", min: min, max: max, step: step, value: value !== null && value !== void 0 ? value : min, onChange: (e) => onChange(parseFloat(e.target.value)), "aria-label": label, className: "w-full", style: { accentColor: color, color } })));
 }
 function SuggestedGoalChip({ value, unit, onApply }) {
     return (React.createElement("button", { type: "button", onClick: onApply, className: "font-mono text-[10px] text-[#3DDCFF] bg-[#3DDCFF]/10 border border-[#3DDCFF]/30 rounded-full px-2 py-0.5 hover:bg-[#3DDCFF]/20 transition shrink-0" },
@@ -593,21 +593,21 @@ function MacroCalculatorCard({ weightDraft, onWeightChange, onSave, saving, macr
         React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-4 gap-3" },
             React.createElement("div", { className: "text-center" },
                 React.createElement("div", { className: "font-mono text-lg text-slate-100" }, Math.round(macros.targetKcal)),
-                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Kcal / día")),
+                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-400 mt-0.5" }, "Kcal / día")),
             React.createElement("div", { className: "text-center" },
                 React.createElement("div", { className: "font-mono text-lg", style: { color: "#7FE3A3" } }, Math.round(macros.proteinG), "g"),
-                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Proteína"),
+                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-400 mt-0.5" }, "Proteína"),
                 macroBar(macros.proteinG * 4, "#7FE3A3")),
             React.createElement("div", { className: "text-center" },
                 React.createElement("div", { className: "font-mono text-lg", style: { color: "#FFC857" } }, Math.round(macros.fatG), "g"),
-                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Grasa"),
+                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-400 mt-0.5" }, "Grasa"),
                 macroBar(macros.fatG * 9, "#FFC857")),
             React.createElement("div", { className: "text-center" },
                 React.createElement("div", { className: "font-mono text-lg", style: { color: "#3DDCFF" } }, Math.round(macros.carbsG), "g"),
-                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Carbohidratos"),
+                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-400 mt-0.5" }, "Carbohidratos"),
                 macroBar(macros.carbsG * 4, "#3DDCFF"))),
-        React.createElement("div", { className: "text-[11px] text-slate-500 mt-3" }, `Objetivo: ${goalLabel}. Estimación inicial — ajusta según cómo se mueva tu peso en 2 semanas.`));
-    const emptyState = !macros && React.createElement("div", { className: "text-xs text-slate-500" }, "Ingresa tu peso para calcular tus macros según tu objetivo.");
+        React.createElement("div", { className: "text-[11px] text-slate-400 mt-3" }, `Objetivo: ${goalLabel}. Estimación inicial — ajusta según cómo se mueva tu peso en 2 semanas.`));
+    const emptyState = !macros && React.createElement("div", { className: "text-xs text-slate-400" }, "Ingresa tu peso para calcular tus macros según tu objetivo.");
     return React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
         React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-[#3DDCFF] mb-3" }, "Calculadora de macros"),
         weightInputRow,
@@ -666,13 +666,13 @@ function DietGeneratorCard(props) {
                 React.createElement("option", { value: "" }, "Elige uno"),
                 Object.keys(NUTRITION_GOAL_LABELS).map((k) => React.createElement("option", { key: k, value: k }, NUTRITION_GOAL_LABELS[k])))));
     const exclusionChips = exclusions.length === 0
-        ? React.createElement("div", { className: "text-xs text-slate-500" }, "Sin alimentos excluidos todavía.")
+        ? React.createElement("div", { className: "text-xs text-slate-400" }, "Sin alimentos excluidos todavía.")
         : React.createElement("div", { className: "flex flex-wrap gap-2" }, exclusions.map((ex) => React.createElement("span", { key: ex.id, className: `flex items-center gap-1.5 text-xs rounded-lg px-2.5 py-1 border ${ex.reason === "allergy" ? "border-[#FF6B5E]/40 text-[#FF6B5E]" : "border-[#1E2535] text-slate-300"}` },
             ex.food_name,
             ex.reason === "allergy" ? " (alergia)" : "",
             React.createElement("button", { type: "button", onClick: () => onRemoveExclusion(ex.id), disabled: removingExclusionId === ex.id, className: "hover:brightness-125 transition" }, "✕"))));
     const exclusionForm = React.createElement("div", { className: "flex gap-2 mt-3" },
-        React.createElement("input", { type: "text", value: newExclusionName, onChange: (e) => setNewExclusionName(e.target.value), placeholder: "ej. mariscos", className: "flex-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" }),
+        React.createElement("input", { type: "text", value: newExclusionName, onChange: (e) => setNewExclusionName(e.target.value), placeholder: "ej. mariscos", "aria-label": "Nombre del alimento a excluir", className: "flex-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" }),
         React.createElement("select", { value: newExclusionReason, onChange: (e) => setNewExclusionReason(e.target.value), className: "bg-[#060809] border border-[#1E2535] rounded-lg px-2 py-2 text-slate-100 text-xs outline-none focus:border-[#3DDCFF]" },
             React.createElement("option", { value: "dislike" }, "No le gusta"),
             React.createElement("option", { value: "allergy" }, "Alergia")),
@@ -684,10 +684,10 @@ function DietGeneratorCard(props) {
             : `Ya usaste tus ${quota} dietas de este mes en Plan Elite. El próximo reinicio de cuota es el día 1 del próximo mes.`);
     }
     else if (!inputsComplete) {
-        generateAction = React.createElement("div", { className: "text-xs text-slate-500" }, "Completa edad, altura, nivel de actividad, objetivo y tu composición corporal arriba para generar tu dieta.");
+        generateAction = React.createElement("div", { className: "text-xs text-slate-400" }, "Completa edad, altura, nivel de actividad, objetivo y tu composición corporal arriba para generar tu dieta.");
     }
     else if (!inputsChanged) {
-        generateAction = React.createElement("div", { className: "text-xs text-slate-500" }, "No hay cambios que actualizar desde tu última dieta generada.");
+        generateAction = React.createElement("div", { className: "text-xs text-slate-400" }, "No hay cambios que actualizar desde tu última dieta generada.");
     }
     else {
         generateAction = React.createElement("button", { type: "button", onClick: onGenerate, disabled: generating, className: "flex items-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-5 py-2.5 hover:brightness-110 transition disabled:opacity-50" },
@@ -701,14 +701,14 @@ function DietGeneratorCard(props) {
             React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-[#3DDCFF] mb-1" }, label),
             mealObj.nombre && React.createElement("div", { className: "text-xs text-slate-200 font-medium mb-1" }, mealObj.nombre),
             React.createElement("ul", { className: "text-xs text-slate-300 list-disc list-inside space-y-0.5" }, (mealObj.alimentos || []).map((a, i) => React.createElement("li", { key: i }, a.porcion ? `${a.item} — ${a.porcion}` : a.item))),
-            mealObj.calorias != null && React.createElement("div", { className: "text-[11px] text-slate-500 mt-1" }, `${mealObj.calorias} kcal · P ${mealObj.proteina_g}g · C ${mealObj.carbos_g}g · G ${mealObj.grasa_g}g`));
+            mealObj.calorias != null && React.createElement("div", { className: "text-[11px] text-slate-400 mt-1" }, `${mealObj.calorias} kcal · P ${mealObj.proteina_g}g · C ${mealObj.carbos_g}g · G ${mealObj.grasa_g}g`));
     }
     const mealPlanBlock = latestPlan && React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 space-y-3" },
         React.createElement("div", { className: "grid grid-cols-4 gap-2 text-center pb-3 border-b border-[#1E2535]" },
-            React.createElement("div", null, React.createElement("div", { className: "font-mono text-sm text-slate-100" }, latestPlan.calorie_target), React.createElement("div", { className: "text-[9px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Kcal")),
-            React.createElement("div", null, React.createElement("div", { className: "font-mono text-sm", style: { color: "#7FE3A3" } }, latestPlan.protein_g, "g"), React.createElement("div", { className: "text-[9px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Proteína")),
-            React.createElement("div", null, React.createElement("div", { className: "font-mono text-sm", style: { color: "#3DDCFF" } }, latestPlan.carbs_g, "g"), React.createElement("div", { className: "text-[9px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Carbos")),
-            React.createElement("div", null, React.createElement("div", { className: "font-mono text-sm", style: { color: "#FFC857" } }, latestPlan.fat_g, "g"), React.createElement("div", { className: "text-[9px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Grasa"))),
+            React.createElement("div", null, React.createElement("div", { className: "font-mono text-sm text-slate-100" }, latestPlan.calorie_target), React.createElement("div", { className: "text-[9px] uppercase tracking-wider text-slate-400 mt-0.5" }, "Kcal")),
+            React.createElement("div", null, React.createElement("div", { className: "font-mono text-sm", style: { color: "#7FE3A3" } }, latestPlan.protein_g, "g"), React.createElement("div", { className: "text-[9px] uppercase tracking-wider text-slate-400 mt-0.5" }, "Proteína")),
+            React.createElement("div", null, React.createElement("div", { className: "font-mono text-sm", style: { color: "#3DDCFF" } }, latestPlan.carbs_g, "g"), React.createElement("div", { className: "text-[9px] uppercase tracking-wider text-slate-400 mt-0.5" }, "Carbos")),
+            React.createElement("div", null, React.createElement("div", { className: "font-mono text-sm", style: { color: "#FFC857" } }, latestPlan.fat_g, "g"), React.createElement("div", { className: "text-[9px] uppercase tracking-wider text-slate-400 mt-0.5" }, "Grasa"))),
         renderMealCard("desayuno", "Desayuno", latestPlan.meal_plan && latestPlan.meal_plan.desayuno),
         renderMealCard("almuerzo", "Almuerzo", latestPlan.meal_plan && latestPlan.meal_plan.almuerzo),
         renderMealCard("cena", "Cena", latestPlan.meal_plan && latestPlan.meal_plan.cena),
@@ -738,7 +738,7 @@ function ProtocolCard({ categoryKey }) {
             React.createElement("div", null,
                 React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-[#3DDCFF] mb-1" }, "Protocolo Premium"),
                 React.createElement("div", { className: "text-sm text-slate-100 font-medium" }, protocol.name)),
-            React.createElement(ChevronRight, { size: 16, className: `text-slate-500 transition-transform ${open ? "rotate-90" : ""}` })),
+            React.createElement(ChevronRight, { size: 16, className: `text-slate-400 transition-transform ${open ? "rotate-90" : ""}` })),
         open && (React.createElement("ol", { className: "mt-4 space-y-2.5" }, protocol.days.map((d, i) => (React.createElement("li", { key: i, className: "flex gap-3 text-xs text-slate-400 leading-relaxed" },
             React.createElement("span", { className: "font-mono text-[#3DDCFF] shrink-0" },
                 "D",
@@ -820,17 +820,17 @@ function AuthScreen({ onAuthed }) {
                 React.createElement("div", { className: "inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#11161F] border border-[#1E2535] mb-4" },
                     React.createElement(Activity, { size: 22, className: "text-[#3DDCFF]" })),
                 React.createElement("h1", { className: "font-display text-2xl text-slate-100 tracking-tight" }, "Biohacker Score"),
-                React.createElement("p", { className: "text-slate-500 text-sm mt-1" }, "Tu panel diario de optimizaci\u00F3n")),
+                React.createElement("p", { className: "text-slate-400 text-sm mt-1" }, "Tu panel diario de optimizaci\u00F3n")),
             React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-6 space-y-4" },
                 React.createElement("div", null,
-                    React.createElement("label", { className: "text-xs uppercase tracking-wider text-slate-500" }, "Correo"),
+                    React.createElement("label", { className: "text-xs uppercase tracking-wider text-slate-400" }, "Correo"),
                     React.createElement("input", { type: "email", value: email, onChange: (e) => setEmail(e.target.value), className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF] transition-colors", placeholder: "tu@correo.com" })),
                 React.createElement("div", null,
-                    React.createElement("label", { className: "text-xs uppercase tracking-wider text-slate-500" }, "Contrase\u00F1a"),
+                    React.createElement("label", { className: "text-xs uppercase tracking-wider text-slate-400" }, "Contrase\u00F1a"),
                     React.createElement("input", { type: "password", minLength: 6, value: password, onChange: (e) => setPassword(e.target.value), onKeyDown: (e) => { if (e.key === "Enter" && mode === "login")
                             submit(); }, className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF] transition-colors", placeholder: "m\u00EDnimo 6 caracteres" })),
                 mode === "signup" && (React.createElement("div", null,
-                    React.createElement("label", { className: "text-xs uppercase tracking-wider text-slate-500" }, "Confirmar contrase\u00F1a"),
+                    React.createElement("label", { className: "text-xs uppercase tracking-wider text-slate-400" }, "Confirmar contrase\u00F1a"),
                     React.createElement("input", { type: "password", minLength: 6, value: confirmPassword, onChange: (e) => setConfirmPassword(e.target.value), onKeyDown: (e) => { if (e.key === "Enter")
                             submit(); }, className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF] transition-colors", placeholder: "repite tu contrase\u00F1a" }))),
                 error && (React.createElement("div", { className: "flex items-start gap-2 text-[#FF6B5E] text-xs bg-[#FF6B5E]/10 border border-[#FF6B5E]/20 rounded-lg px-3 py-2" },
@@ -842,7 +842,7 @@ function AuthScreen({ onAuthed }) {
                     " ",
                     info)),
                 React.createElement("button", { type: "button", onClick: submit, disabled: loading, className: "w-full flex items-center justify-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg py-2.5 hover:brightness-110 transition disabled:opacity-50" }, loading ? React.createElement(Loader2, { size: 16, className: "animate-spin" }) : mode === "login" ? "Entrar" : "Crear cuenta")),
-            React.createElement("button", { onClick: () => { setMode(mode === "login" ? "signup" : "login"); setError(""); setInfo(""); setConfirmPassword(""); }, className: "w-full text-center text-xs text-slate-500 mt-4 hover:text-slate-300 transition" }, mode === "login" ? "¿No tienes cuenta? Crea una" : "¿Ya tienes cuenta? Inicia sesión"))));
+            React.createElement("button", { onClick: () => { setMode(mode === "login" ? "signup" : "login"); setError(""); setInfo(""); setConfirmPassword(""); }, className: "w-full text-center text-xs text-slate-400 mt-4 hover:text-slate-300 transition" }, mode === "login" ? "¿No tienes cuenta? Crea una" : "¿Ya tienes cuenta? Inicia sesión"))));
 }
 function BodyImageButton({ item, selected, onClick, accent }) {
     return (React.createElement("button", { onClick: onClick, type: "button", className: `relative rounded-2xl overflow-hidden border-2 transition ${selected ? "" : "border-[#1E2535] opacity-70 hover:opacity-100"}`, style: selected ? { borderColor: accent, boxShadow: `0 0 0 1px ${accent}` } : {} },
@@ -856,12 +856,12 @@ function BodySelector({ draft, setDraft, onSave, saving, savedGender, savedCurre
     const list = BODY_IMAGES[draft.gender];
     return (React.createElement("section", null,
         React.createElement("div", { className: "flex items-center justify-between mb-4" },
-            React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500" }, "Tu composici\u00F3n corporal"),
+            React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400" }, "Tu composici\u00F3n corporal"),
             !editing && savedGender && (React.createElement("button", { onClick: () => setEditing(true), className: "text-xs text-[#3DDCFF] hover:brightness-110 transition" }, "Editar"))),
         !editing && savedGender ? (React.createElement("div", { className: "grid grid-cols-2 gap-3" },
             React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-3 text-center" },
                 React.createElement("img", { src: BODY_IMAGES[savedGender][savedCurrent - 1].img, className: "w-full h-32 object-cover object-top rounded-xl mb-2" }),
-                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500" }, "Actual"),
+                React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-400" }, "Actual"),
                 React.createElement("div", { className: "text-xs text-slate-200" }, BODY_IMAGES[savedGender][savedCurrent - 1].label)),
             React.createElement("div", { className: "bg-[#11161F] border border-[#3DDCFF]/30 rounded-2xl p-3 text-center" },
                 React.createElement("img", { src: BODY_IMAGES[savedGender][savedTarget - 1].img, className: "w-full h-32 object-cover object-top rounded-xl mb-2" }),
@@ -892,7 +892,7 @@ function RoutineExerciseRow({ row, index, exerciseLibrary, onChange, onRemove })
         React.createElement("input", { type: "number", min: 1, value: row.sets, onChange: (e) => onChange(index, { ...row, sets: parseInt(e.target.value) || 1 }), className: "col-span-2 bg-[#060809] border border-[#1E2535] rounded-lg px-2 py-1.5 text-xs text-slate-200", placeholder: "Sets" }),
         React.createElement("input", { type: "text", value: row.reps, onChange: (e) => onChange(index, { ...row, reps: e.target.value }), className: "col-span-2 bg-[#060809] border border-[#1E2535] rounded-lg px-2 py-1.5 text-xs text-slate-200", placeholder: "Reps" }),
         React.createElement("input", { type: "number", min: 0, value: row.rest_seconds, onChange: (e) => onChange(index, { ...row, rest_seconds: parseInt(e.target.value) || 0 }), className: "col-span-2 bg-[#060809] border border-[#1E2535] rounded-lg px-2 py-1.5 text-xs text-slate-200", placeholder: "Descanso (s)" }),
-        React.createElement("button", { type: "button", onClick: () => onRemove(index), className: "col-span-1 text-slate-500 hover:text-[#FF6B5E] transition text-xs" }, "\u2715"));
+        React.createElement("button", { type: "button", onClick: () => onRemove(index), className: "col-span-1 text-slate-400 hover:text-[#FF6B5E] transition text-xs" }, "\u2715"));
 }
 const EMPTY_ROUTINE_ROW = { exercise: "", sets: 3, reps: "8-10", rest_seconds: 60 };
 // ---------- Exercise library: levels, muscle groups, auto-generation ----------
@@ -927,7 +927,7 @@ function ExerciseCard({ exercise }) {
         React.createElement("div", { className: "flex items-start justify-between gap-3" },
             React.createElement("div", null,
                 React.createElement("div", { className: "text-sm text-slate-100 font-medium" }, exercise.name),
-                React.createElement("div", { className: "text-[11px] text-slate-500 mt-0.5" }, exercise.equipment || "Sin equipo")),
+                React.createElement("div", { className: "text-[11px] text-slate-400 mt-0.5" }, exercise.equipment || "Sin equipo")),
             exercise.video_url && React.createElement("a", { href: exercise.video_url, target: "_blank", rel: "noopener noreferrer", className: "shrink-0 text-[11px] text-[#3DDCFF] border border-[#3DDCFF]/30 rounded-lg px-2 py-1 hover:bg-[#3DDCFF]/10 transition" }, "Ver en YouTube")),
         exercise.instructions && React.createElement("div", { className: "text-xs text-slate-400 mt-2 leading-relaxed" }, exercise.instructions));
 }
@@ -943,11 +943,11 @@ function ExerciseLibrary({ exercises, loading }) {
         body = React.createElement("div", { className: "flex justify-center p-6" }, React.createElement(Loader2, { size: 18, className: "animate-spin text-slate-600" }));
     }
     else if (grouped.length === 0) {
-        body = React.createElement("div", { className: "text-sm text-slate-500" }, "Todavía no hay ejercicios cargados para este nivel.");
+        body = React.createElement("div", { className: "text-sm text-slate-400" }, "Todavía no hay ejercicios cargados para este nivel.");
     }
     else {
         body = React.createElement("div", { className: "space-y-5" }, grouped.map((g) => React.createElement("div", { key: g.group },
-            React.createElement("h4", { className: "text-[11px] uppercase tracking-wider text-slate-500 mb-2" }, MUSCLE_GROUP_LABELS[g.group] || g.group),
+            React.createElement("h4", { className: "text-[11px] uppercase tracking-wider text-slate-400 mb-2" }, MUSCLE_GROUP_LABELS[g.group] || g.group),
             React.createElement("div", { className: "grid sm:grid-cols-2 gap-3" }, g.items.map((ex) => React.createElement(ExerciseCard, { key: ex.id, exercise: ex }))))));
     }
     return React.createElement("div", { className: "space-y-4" }, levelTabs, body);
@@ -1008,10 +1008,10 @@ function RoutineBuilder({ exerciseLibrary, templates, onCreate, creating }) {
     return React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 space-y-3" },
         modeToggle,
         mode === "manual" ? manualControls : autoControls,
-        mode === "manual" && React.createElement("div", { className: "text-[11px] text-slate-500" }, "El selector de ejercicio abajo se filtra por el nivel elegido arriba."),
-        mode === "auto" && React.createElement("div", { className: "text-[11px] text-slate-500" }, "Se elige 1 ejercicio por grupo muscular principal seg\u00FAn el nivel. Puedes editar cualquier ejercicio antes de guardar."),
-        React.createElement("input", { type: "text", value: title, onChange: (e) => setTitle(e.target.value), placeholder: "T\u00EDtulo de la rutina", className: "w-full bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-[#3DDCFF]" }),
-        React.createElement("input", { type: "text", value: description, onChange: (e) => setDescription(e.target.value), placeholder: "Descripci\u00F3n (opcional)", className: "w-full bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-[#3DDCFF]" }),
+        mode === "manual" && React.createElement("div", { className: "text-[11px] text-slate-400" }, "El selector de ejercicio abajo se filtra por el nivel elegido arriba."),
+        mode === "auto" && React.createElement("div", { className: "text-[11px] text-slate-400" }, "Se elige 1 ejercicio por grupo muscular principal seg\u00FAn el nivel. Puedes editar cualquier ejercicio antes de guardar."),
+        React.createElement("input", { type: "text", value: title, onChange: (e) => setTitle(e.target.value), placeholder: "T\u00EDtulo de la rutina", "aria-label": "T\u00EDtulo de la rutina", className: "w-full bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-[#3DDCFF]" }),
+        React.createElement("input", { type: "text", value: description, onChange: (e) => setDescription(e.target.value), placeholder: "Descripci\u00F3n (opcional)", "aria-label": "Descripci\u00F3n de la rutina", className: "w-full bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-[#3DDCFF]" }),
         React.createElement("div", { className: "space-y-2" }, rows.map((row, i) => React.createElement(RoutineExerciseRow, { key: i, row: row, index: i, exerciseLibrary: levelFilteredLibrary, onChange: updateRow, onRemove: removeRow }))),
         React.createElement("button", { type: "button", onClick: addRow, className: "text-xs text-[#3DDCFF] hover:brightness-110 transition" }, "+ Agregar ejercicio"),
         React.createElement("button", { type: "button", onClick: submit, disabled: creating, className: "flex items-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-5 py-2 hover:brightness-110 transition disabled:opacity-50" },
@@ -1034,9 +1034,9 @@ function RoutineCard({ routine, clients, assignedClientIds, onAssign, assigning,
             confirmingDelete
                 ? React.createElement("div", { className: "flex items-center gap-1.5 shrink-0" },
                     React.createElement("button", { type: "button", onClick: () => onDelete(routine.id), disabled: deleting, className: "text-[11px] text-[#FF6B5E] hover:brightness-125 transition disabled:opacity-40" }, deleting ? React.createElement(Loader2, { size: 12, className: "animate-spin" }) : "Confirmar"),
-                    React.createElement("button", { type: "button", onClick: () => setConfirmingDelete(false), disabled: deleting, className: "text-[11px] text-slate-500 hover:text-slate-300 transition" }, "Cancelar"))
-                : React.createElement("button", { type: "button", onClick: () => setConfirmingDelete(true), className: "text-slate-500 hover:text-[#FF6B5E] transition shrink-0", title: "Eliminar rutina" }, React.createElement(Trash2, { size: 14 }))),
-        routine.description && React.createElement("div", { className: "text-xs text-slate-500 mt-0.5" }, routine.description),
+                    React.createElement("button", { type: "button", onClick: () => setConfirmingDelete(false), disabled: deleting, className: "text-[11px] text-slate-400 hover:text-slate-300 transition" }, "Cancelar"))
+                : React.createElement("button", { type: "button", onClick: () => setConfirmingDelete(true), className: "text-slate-400 hover:text-[#FF6B5E] transition shrink-0", title: "Eliminar rutina" }, React.createElement(Trash2, { size: 14 }))),
+        routine.description && React.createElement("div", { className: "text-xs text-slate-400 mt-0.5" }, routine.description),
         React.createElement("ul", { className: "mt-3 space-y-1" }, exercises.map((ex, i) => React.createElement("li", { key: i, className: "text-xs text-slate-400" }, React.createElement("span", { className: "text-slate-200" }, ex.exercise), ` \u2014 ${ex.sets}x${ex.reps}`, ex.rest_seconds ? `, ${ex.rest_seconds}s descanso` : ""))),
         assignedNames.length > 0 && React.createElement("div", { className: "text-[11px] text-[#7FE3A3] mt-3" }, "Asignada a: ", assignedNames.join(", ")),
         clients.length > 0 && React.createElement("div", { className: "flex gap-2 mt-3" },
@@ -1054,10 +1054,10 @@ function CoachClientsPanel({ clients, onAdd, adding, addError }) {
     }
     return React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 space-y-3" },
         clients.length === 0
-            ? React.createElement("div", { className: "text-sm text-slate-500" }, "Todav\u00EDa no tienes clientes vinculados.")
-            : React.createElement("ul", { className: "space-y-2" }, clients.map((c) => React.createElement("li", { key: c.client_id, className: "flex items-center justify-between text-sm text-slate-200" }, React.createElement("span", null, c.full_name || c.email), React.createElement("span", { className: "text-xs text-slate-500" }, c.email)))),
+            ? React.createElement("div", { className: "text-sm text-slate-400" }, "Todav\u00EDa no tienes clientes vinculados.")
+            : React.createElement("ul", { className: "space-y-2" }, clients.map((c) => React.createElement("li", { key: c.client_id, className: "flex items-center justify-between text-sm text-slate-200" }, React.createElement("span", null, c.full_name || c.email), React.createElement("span", { className: "text-xs text-slate-400" }, c.email)))),
         React.createElement("div", { className: "flex gap-2" },
-            React.createElement("input", { type: "email", value: email, onChange: (e) => setEmail(e.target.value), onKeyDown: (e) => { if (e.key === "Enter") submit(); }, placeholder: "correo@cliente.com", className: "flex-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-[#3DDCFF]" }),
+            React.createElement("input", { type: "email", value: email, onChange: (e) => setEmail(e.target.value), onKeyDown: (e) => { if (e.key === "Enter") submit(); }, placeholder: "correo@cliente.com", "aria-label": "Correo del cliente a agregar", className: "flex-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-[#3DDCFF]" }),
             React.createElement("button", { type: "button", onClick: submit, disabled: adding, className: "flex items-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-4 py-2 hover:brightness-110 transition disabled:opacity-50" }, adding ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : "Agregar")),
         addError && React.createElement("div", { className: "flex items-start gap-2 text-[#FF6B5E] text-xs bg-[#FF6B5E]/10 border border-[#FF6B5E]/20 rounded-lg px-3 py-2" }, React.createElement(AlertCircle, { size: 14, className: "mt-0.5 shrink-0" }), " ", addError));
 }
@@ -1075,17 +1075,17 @@ function CoachPanel(props) {
     return React.createElement("div", { className: "space-y-6" },
         React.createElement("div", { className: "text-sm text-slate-400" }, props.businessName || "Tu panel de coach"),
         React.createElement("div", null,
-            React.createElement("h3", { className: "text-[11px] uppercase tracking-wider text-slate-500 mb-2" }, "Clientes"),
+            React.createElement("h3", { className: "text-[11px] uppercase tracking-wider text-slate-400 mb-2" }, "Clientes"),
             React.createElement(CoachClientsPanel, { clients: props.clients, onAdd: props.onAddClient, adding: props.addingClient, addError: props.addClientError })),
         React.createElement("div", null,
-            React.createElement("h3", { className: "text-[11px] uppercase tracking-wider text-slate-500 mb-2" }, "Nueva rutina"),
+            React.createElement("h3", { className: "text-[11px] uppercase tracking-wider text-slate-400 mb-2" }, "Nueva rutina"),
             React.createElement(RoutineBuilder, { exerciseLibrary: props.exerciseLibrary, templates: props.templates, onCreate: props.onCreateRoutine, creating: props.creatingRoutine })),
         React.createElement("div", null,
-            React.createElement("h3", { className: "text-[11px] uppercase tracking-wider text-slate-500 mb-2" }, "Tus rutinas"),
+            React.createElement("h3", { className: "text-[11px] uppercase tracking-wider text-slate-400 mb-2" }, "Tus rutinas"),
             props.loading
                 ? React.createElement("div", { className: "flex justify-center p-6" }, React.createElement(Loader2, { size: 18, className: "animate-spin text-slate-600" }))
                 : props.routines.length === 0
-                    ? React.createElement("div", { className: "text-sm text-slate-500" }, "Todav\u00EDa no has creado rutinas.")
+                    ? React.createElement("div", { className: "text-sm text-slate-400" }, "Todav\u00EDa no has creado rutinas.")
                     : React.createElement("div", { className: "space-y-3" }, routineCards)));
 }
 function MyRoutinesSection({ assignments }) {
@@ -1096,12 +1096,12 @@ function MyRoutinesSection({ assignments }) {
         const exercises = Array.isArray(routine.content) ? routine.content : [];
         return React.createElement("div", { key: a.id, className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
             React.createElement("div", { className: "text-sm text-slate-100 font-medium" }, routine.title),
-            routine.description && React.createElement("div", { className: "text-xs text-slate-500 mt-0.5" }, routine.description),
+            routine.description && React.createElement("div", { className: "text-xs text-slate-400 mt-0.5" }, routine.description),
             React.createElement("ul", { className: "mt-3 space-y-1" }, exercises.map((ex, i) => React.createElement("li", { key: i, className: "text-xs text-slate-400" }, React.createElement("span", { className: "text-slate-200" }, ex.exercise), ` \u2014 ${ex.sets}x${ex.reps}`, ex.rest_seconds ? `, ${ex.rest_seconds}s descanso` : ""))),
             a.notes && React.createElement("div", { className: "text-xs text-[#3DDCFF] mt-2" }, a.notes));
     });
     return React.createElement("section", null,
-        React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Mi rutina asignada"),
+        React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400 mb-4" }, "Mi rutina asignada"),
         React.createElement("div", { className: "space-y-3" }, cards));
 }
 // ---------- Dashboard ----------
@@ -1884,7 +1884,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         const macroCalculator = React.createElement(MacroCalculatorCard, { weightDraft: weightDraft, onWeightChange: setWeightDraft, onSave: saveWeight, saving: savingWeight, macros: macros, goalLabel: GOAL_DIRECTION_LABELS[goalDirection] || "Sin definir" });
         const nutritionPlanBlock = matchedNutrition
             ? React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" }, React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-[#7FE3A3] mb-1" }, "Nutrición — ", GOAL_DIRECTION_LABELS[goalDirection]), React.createElement("div", { className: "text-sm text-slate-100 font-medium mb-2" }, matchedNutrition.title), React.createElement("div", { className: "text-xs text-slate-400 leading-relaxed space-y-2" }, React.createElement("div", null, React.createElement("span", { className: "text-slate-300" }, "Macros: "), matchedNutrition.macro_guidance), React.createElement("div", null, React.createElement("span", { className: "text-slate-300" }, "Horarios: "), matchedNutrition.meal_timing_guidance), React.createElement("div", null, React.createElement("span", { className: "text-slate-300" }, "Ejemplos: "), matchedNutrition.food_examples), React.createElement("div", null, React.createElement("span", { className: "text-slate-300" }, "Limita: "), matchedNutrition.foods_to_limit), showAdaptiveNote ? React.createElement("div", { className: "mt-2 bg-[#3DDCFF]/10 border border-[#3DDCFF]/20 rounded-lg px-3 py-2 text-[#3DDCFF]" }, matchedNutrition.adaptive_note) : null))
-            : React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 text-sm text-slate-500" }, "Selecciona tu composición corporal arriba para ver tu plan de nutrición.");
+            : React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 text-sm text-slate-400" }, "Selecciona tu composición corporal arriba para ver tu plan de nutrición.");
         const currentTier = resolveClientTier(premiumSource, subscriptionTier);
         const tierDisplayNames = Object.fromEntries(subscriptionPlans.map((p) => [p.tier, p.display_name]));
         const planInfo = subscriptionPlans.find((p) => p.tier === currentTier) || null;
@@ -1925,9 +1925,9 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         });
         nutritionContent = React.createElement("div", { className: "space-y-3" }, macroCalculator, nutritionPlanBlock, dietGenerator);
     }
-    const supplementCards = sortedSupplements.map((s) => React.createElement("div", { key: s.id, className: `bg-[#11161F] border rounded-2xl p-4 ${s.goal_category === weakestSupplementGoal ? "border-[#3DDCFF]/40" : "border-[#1E2535]"}` }, React.createElement("div", { className: "flex items-center justify-between mb-1" }, React.createElement("span", { className: "text-sm text-slate-100 font-medium" }, s.name), React.createElement("span", { className: `text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded ${s.evidence_tier === "strong" ? "text-[#7FE3A3] bg-[#7FE3A3]/10" : "text-[#FFC857] bg-[#FFC857]/10"}` }, s.evidence_tier === "strong" ? "Evidencia fuerte" : "Evidencia moderada")), React.createElement("div", { className: "text-xs text-slate-400 leading-relaxed mb-2" }, s.why_it_works), React.createElement("div", { className: "text-[11px] text-slate-500 font-mono mb-2" }, s.dosage_range), s.amazon_affiliate_url ? React.createElement("a", { href: s.amazon_affiliate_url, target: "_blank", rel: "noopener noreferrer sponsored", className: "text-xs text-[#3DDCFF] hover:brightness-110 transition" }, "Ver en Amazon →") : null));
+    const supplementCards = sortedSupplements.map((s) => React.createElement("div", { key: s.id, className: `bg-[#11161F] border rounded-2xl p-4 ${s.goal_category === weakestSupplementGoal ? "border-[#3DDCFF]/40" : "border-[#1E2535]"}` }, React.createElement("div", { className: "flex items-center justify-between mb-1" }, React.createElement("span", { className: "text-sm text-slate-100 font-medium" }, s.name), React.createElement("span", { className: `text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded ${s.evidence_tier === "strong" ? "text-[#7FE3A3] bg-[#7FE3A3]/10" : "text-[#FFC857] bg-[#FFC857]/10"}` }, s.evidence_tier === "strong" ? "Evidencia fuerte" : "Evidencia moderada")), React.createElement("div", { className: "text-xs text-slate-400 leading-relaxed mb-2" }, s.why_it_works), React.createElement("div", { className: "text-[11px] text-slate-400 font-mono mb-2" }, s.dosage_range), s.amazon_affiliate_url ? React.createElement("a", { href: s.amazon_affiliate_url, target: "_blank", rel: "noopener noreferrer sponsored", className: "text-xs text-[#3DDCFF] hover:brightness-110 transition" }, "Ver en Amazon →") : null));
     // Suplementos is fully open (no isPremium gating) — see loadSupplements above.
-    const supplementsContent = supplementCards.length > 0 ? React.createElement("div", { className: "grid sm:grid-cols-2 gap-3" }, supplementCards) : React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 text-sm text-slate-500" }, "No hay suplementos disponibles todavía.");
+    const supplementsContent = supplementCards.length > 0 ? React.createElement("div", { className: "grid sm:grid-cols-2 gap-3" }, supplementCards) : React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 text-sm text-slate-400" }, "No hay suplementos disponibles todavía.");
     // Built as its own variable (not inlined) to keep the deeply-nested return's paren
     // count tractable by hand, same convention as nutritionContent above.
     // Three-step flow (closed -> warn -> confirm -> done) so an irreversible action
@@ -1938,23 +1938,23 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     let deleteZoneBody;
     if (deleteStep === "closed") {
         deleteZoneBody = React.createElement("div", { className: "flex flex-col sm:flex-row sm:items-center justify-between gap-3" },
-            React.createElement("div", { className: "text-xs text-slate-500 max-w-md" }, "Borra tu perfil, historial diario, planes de dieta y toda tu información de la app de forma permanente."),
+            React.createElement("div", { className: "text-xs text-slate-400 max-w-md" }, "Borra tu perfil, historial diario, planes de dieta y toda tu información de la app de forma permanente."),
             React.createElement("button", { onClick: () => setDeleteStep("warn"), className: "shrink-0 text-xs text-red-400 border border-red-900/50 rounded-lg px-4 py-2 hover:bg-red-900/20 transition" }, "Eliminar mi cuenta"));
     }
     else if (deleteStep === "warn") {
         deleteZoneBody = React.createElement("div", { className: "space-y-3" },
             React.createElement("div", { className: "text-xs text-slate-400 leading-relaxed" }, "Esto es permanente y no se puede deshacer. Se eliminará tu perfil, tu historial de puntajes diarios, tus planes de dieta y, si eres coach, tus rutinas y tu lista de clientes. Si tienes una suscripción activa (como cliente o como coach), se cancelará de inmediato."),
             React.createElement("div", { className: "flex gap-2" },
-                React.createElement("button", { onClick: resetDeleteFlow, className: "text-xs text-slate-500 hover:text-slate-300 transition px-4 py-2" }, "Cancelar"),
+                React.createElement("button", { onClick: resetDeleteFlow, className: "text-xs text-slate-400 hover:text-slate-300 transition px-4 py-2" }, "Cancelar"),
                 React.createElement("button", { onClick: () => setDeleteStep("confirm"), className: "text-xs bg-red-900/80 text-red-100 rounded-lg px-4 py-2 hover:bg-red-900 transition" }, "Entiendo, continuar")));
     }
     else if (deleteStep === "confirm") {
         deleteZoneBody = React.createElement("div", { className: "space-y-3" },
-            React.createElement("label", { className: "block text-xs text-slate-500" }, "Escribe ", React.createElement("span", { className: "text-slate-300 font-mono" }, "ELIMINAR"), " para confirmar"),
+            React.createElement("label", { className: "block text-xs text-slate-400" }, "Escribe ", React.createElement("span", { className: "text-slate-300 font-mono" }, "ELIMINAR"), " para confirmar"),
             React.createElement("input", { type: "text", value: deleteConfirmText, onChange: (e) => setDeleteConfirmText(e.target.value), className: "w-full bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-red-900/60" }),
             deleteAccountError ? React.createElement("div", { className: "text-xs text-red-400" }, deleteAccountError) : null,
             React.createElement("div", { className: "flex gap-2" },
-                React.createElement("button", { onClick: resetDeleteFlow, disabled: deletingAccount, className: "text-xs text-slate-500 hover:text-slate-300 transition px-4 py-2" }, "Cancelar"),
+                React.createElement("button", { onClick: resetDeleteFlow, disabled: deletingAccount, className: "text-xs text-slate-400 hover:text-slate-300 transition px-4 py-2" }, "Cancelar"),
                 React.createElement("button", { onClick: handleDeleteAccount, disabled: deleteConfirmText !== "ELIMINAR" || deletingAccount, className: "text-xs bg-red-900/80 text-red-100 rounded-lg px-4 py-2 hover:bg-red-900 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2" },
                     deletingAccount ? React.createElement(Loader2, { size: 12, className: "animate-spin" }) : null,
                     "Eliminar cuenta permanentemente")));
@@ -1962,7 +1962,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     else {
         deleteZoneBody = React.createElement("div", { className: "space-y-3" },
             React.createElement("div", { className: "text-sm text-slate-200" }, "Tu cuenta fue eliminada."),
-            React.createElement("div", { className: "text-xs text-slate-500" }, "Cerramos tu sesión. Gracias por haber usado Biohacker Score."),
+            React.createElement("div", { className: "text-xs text-slate-400" }, "Cerramos tu sesión. Gracias por haber usado Biohacker Score."),
             React.createElement("button", { onClick: onLogout, className: "text-xs bg-[#3DDCFF] text-[#06121A] font-medium rounded-lg px-4 py-2 hover:brightness-110 transition" }, "Entendido"));
     }
     const accountDangerZoneSection = React.createElement("section", { className: "bg-[#11161F] border border-red-900/40 rounded-2xl p-5" },
@@ -1975,15 +1975,15 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         { key: "suplementos", label: "Suplementos" },
         { key: "metas", label: "Metas" },
     ];
-    const tabNav = React.createElement("nav", { className: "flex gap-1 overflow-x-auto border-b border-[#1E2535] mb-2 sm:justify-center" }, TABS.map((t) => React.createElement("button", { key: t.key, type: "button", onClick: () => setActiveTab(t.key), className: `shrink-0 text-xs sm:text-sm px-4 py-2.5 border-b-2 transition ${activeTab === t.key ? "border-[#3DDCFF] text-[#3DDCFF]" : "border-transparent text-slate-500 hover:text-slate-300"}` }, t.label)));
+    const tabNav = React.createElement("nav", { className: "flex gap-1 overflow-x-auto border-b border-[#1E2535] mb-2 sm:justify-center" }, TABS.map((t) => React.createElement("button", { key: t.key, type: "button", onClick: () => setActiveTab(t.key), className: `shrink-0 text-xs sm:text-sm px-4 py-2.5 border-b-2 transition ${activeTab === t.key ? "border-[#3DDCFF] text-[#3DDCFF]" : "border-transparent text-slate-400 hover:text-slate-300"}` }, t.label)));
     return (React.createElement("div", { className: "min-h-screen bg-[#060809] text-slate-100" },
         React.createElement("header", { className: "border-b border-[#1E2535] px-6 py-4 flex items-center justify-between sticky top-0 bg-[#060809]/90 backdrop-blur z-10" },
             React.createElement("div", { className: "flex items-center gap-2" },
                 React.createElement(Activity, { size: 18, className: "text-[#3DDCFF]" }),
                 React.createElement("span", { className: "font-display text-sm tracking-tight" }, "Biohacker Score")),
             React.createElement("div", { className: "flex items-center gap-4" },
-                React.createElement("span", { className: "text-xs text-slate-500 hidden sm:inline" }, session.user.email),
-                React.createElement("button", { onClick: onLogout, className: "text-slate-500 hover:text-slate-200 transition" },
+                React.createElement("span", { className: "text-xs text-slate-400 hidden sm:inline" }, session.user.email),
+                React.createElement("button", { onClick: onLogout, "aria-label": "Cerrar sesión", className: "text-slate-400 hover:text-slate-200 transition" },
                     React.createElement(LogOut, { size: 16 })))),
         React.createElement("main", { className: "max-w-4xl mx-auto px-6 py-10 space-y-10" },
             actionError && React.createElement("div", { role: "alert", className: "flex items-center justify-between gap-3 bg-[#FF6B5E]/10 border border-[#FF6B5E]/25 rounded-xl px-4 py-3 text-sm text-[#FF6B5E]" },
@@ -1995,21 +1995,21 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                 streak > 0 && (React.createElement("div", { className: "flex items-center gap-1.5 mt-3 text-sm" },
                     React.createElement("span", null, "\uD83D\uDD25"),
                     React.createElement("span", { className: "font-mono text-slate-200" }, streak),
-                    React.createElement("span", { className: "text-slate-500" }, streak === 1 ? "día seguido" : "días seguidos"))),
+                    React.createElement("span", { className: "text-slate-400" }, streak === 1 ? "día seguido" : "días seguidos"))),
                 React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-4 gap-3 mt-8 w-full max-w-md" }, categories.map((c) => (React.createElement("div", { key: c.key, className: "text-center" },
                     React.createElement("div", { className: "font-mono text-lg", style: { color: scoreColor(c.value) } }, c.value != null ? Math.round(c.value) : "--"),
-                    React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, c.label)))))),
+                    React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-400 mt-0.5" }, c.label)))))),
             activeTab === "inicio" && React.createElement(BodySelector, { draft: bodyDraft, setDraft: setBodyDraft, onSave: saveBody, saving: savingBody, savedGender: bodyGender, savedCurrent: bodyCurrentStage, savedTarget: bodyTargetStage, editing: editingBody, setEditing: setEditingBody }),
             activeTab === "metas" && isPremium && (React.createElement("section", null,
                 React.createElement("div", { className: "flex items-center justify-between mb-4" },
-                    React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500" }, "Tus metas"),
+                    React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400" }, "Tus metas"),
                     React.createElement("button", { onClick: () => { setGoalsDraft(goals); setEditingGoals(!editingGoals); }, className: "text-xs text-[#3DDCFF] hover:brightness-110 transition" }, editingGoals ? "Cancelar" : "Editar metas")),
                 !editingGoals && matchedNutrition && (React.createElement("div", { className: "bg-[#11161F] border border-[#3DDCFF]/25 rounded-2xl p-4 mb-4 flex items-center justify-between gap-4" },
                     React.createElement("div", null,
                         React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-[#3DDCFF] mb-1" }, "Según tu composición corporal"),
                         React.createElement("div", { className: "text-sm text-slate-100 font-medium" }, GOAL_DIRECTION_LABELS[goalDirection]),
                         React.createElement("div", { className: "text-xs text-slate-400 mt-1" }, matchedNutrition.title)),
-                    React.createElement("span", { className: "text-[10px] text-slate-500 shrink-0" }, "Ver detalle abajo ↓"))),
+                    React.createElement("span", { className: "text-[10px] text-slate-400 shrink-0" }, "Ver detalle abajo ↓"))),
                 editingGoals ? (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 space-y-4" },
                     React.createElement("button", { type: "button", onClick: () => setGoalsDraft(suggested), className: "text-xs text-[#06121A] bg-[#3DDCFF] font-medium rounded-lg px-3 py-1.5 hover:brightness-110 transition" }, "Usar todas las sugerencias"),
                     React.createElement("div", { className: "grid sm:grid-cols-2 gap-3" },
@@ -2040,32 +2040,32 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                         React.createElement("div", { className: "font-mono text-sm text-slate-200" },
                             goals.sleepHours,
                             "h"),
-                        React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Sue\u00F1o")),
+                        React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-400 mt-0.5" }, "Sue\u00F1o")),
                     React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-3 text-center" },
                         React.createElement("div", { className: "font-mono text-sm text-slate-200" },
                             goals.fastingHours,
                             "h"),
-                        React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Ayuno")),
+                        React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-400 mt-0.5" }, "Ayuno")),
                     React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-3 text-center" },
                         React.createElement("div", { className: "font-mono text-sm text-slate-200" },
                             goals.exerciseMinutes,
                             "min"),
-                        React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Ejercicio")),
+                        React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-400 mt-0.5" }, "Ejercicio")),
                     React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-3 text-center" },
                         React.createElement("div", { className: "font-mono text-sm text-slate-200" },
                             "\u2264",
                             goals.stressMax),
-                        React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-500 mt-0.5" }, "Estr\u00E9s")))))),
+                        React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-400 mt-0.5" }, "Estr\u00E9s")))))),
             activeTab === "metas" && !isPremium && React.createElement("section", null,
-                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Tus metas"),
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400 mb-4" }, "Tus metas"),
                 premiumTeaser("Metas personalizadas por categor\u00EDa")),
             activeTab === "inicio" && React.createElement("section", null,
-                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Registro de hoy"),
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400 mb-4" }, "Registro de hoy"),
                 isNativeApp && React.createElement("div", { className: "mb-4" },
                     React.createElement("button", { type: "button", onClick: syncFromHealth, disabled: healthSyncing, className: "flex items-center gap-2 text-xs text-[#3DDCFF] border border-[#3DDCFF]/30 rounded-lg px-3 py-2 hover:bg-[#3DDCFF]/10 transition disabled:opacity-50" },
                         healthSyncing ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : React.createElement(Activity, { size: 14 }),
                         "Traer minutos de ejercicio de Salud"),
-                    healthSyncMessage && React.createElement("div", { className: "text-[11px] text-slate-500 mt-2" }, healthSyncMessage)),
+                    healthSyncMessage && React.createElement("div", { className: "text-[11px] text-slate-400 mt-2" }, healthSyncMessage)),
                 React.createElement("div", { className: "grid sm:grid-cols-2 gap-3" },
                     React.createElement(FieldSlider, { icon: Moon, label: "Horas de sue\u00F1o", unit: "h", value: sleepHours, onChange: setSleepHours, min: 0, max: 12, step: 0.5, color: "#3DDCFF" }),
                     React.createElement(FieldSlider, { icon: Moon, label: "Calidad de sue\u00F1o", unit: "/10", value: sleepQuality, onChange: setSleepQuality, min: 1, max: 10, step: 1, color: "#3DDCFF" }),
@@ -2078,11 +2078,11 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                     saving ? React.createElement(Loader2, { size: 16, className: "animate-spin" }) : saved ? React.createElement(Check, { size: 16 }) : React.createElement(ChevronRight, { size: 16 }),
                     saved ? "Guardado" : "Guardar registro de hoy")),
             activeTab === "entrenamiento" && !isPremium && React.createElement("section", null,
-                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Entrenamiento"),
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400 mb-4" }, "Entrenamiento"),
                 premiumTeaser("Rutina asignada y biblioteca de ejercicios")),
             activeTab === "entrenamiento" && isPremium && React.createElement(MyRoutinesSection, { assignments: myRoutineAssignments }),
             activeTab === "entrenamiento" && isCoach && React.createElement("section", null,
-                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Panel de coach"),
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400 mb-4" }, "Panel de coach"),
                 React.createElement(CoachPanel, {
                     businessName: coachBusinessName,
                     clients: coachClients,
@@ -2102,15 +2102,15 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                     loading: loadingCoachData,
                 })),
             activeTab === "entrenamiento" && isPremium && React.createElement("section", null,
-                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Biblioteca de ejercicios"),
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400 mb-4" }, "Biblioteca de ejercicios"),
                 React.createElement(ExerciseLibrary, { exercises: exerciseLibrary, loading: loadingExerciseLibrary })),
             activeTab === "inicio" && React.createElement("section", null,
-                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Recomendaciones de hoy"),
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400 mb-4" }, "Recomendaciones de hoy"),
                 isPremium ? (React.createElement("div", { className: "space-y-3" },
                     weekly && weekly.deltaPct != null && (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 flex items-center justify-between" },
                         React.createElement("div", null,
                             React.createElement("div", { className: "text-sm text-slate-100 font-medium" }, "Esta semana vs la anterior"),
-                            React.createElement("div", { className: "text-xs text-slate-500 mt-0.5" },
+                            React.createElement("div", { className: "text-xs text-slate-400 mt-0.5" },
                                 "Promedio: ",
                                 Math.round(weekly.thisAvg),
                                 " vs ",
@@ -2120,7 +2120,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                             " ",
                             Math.abs(Math.round(weekly.deltaPct)),
                             "%"))),
-                    recommendations.length === 0 ? (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 text-sm text-slate-500" }, "Completa tu registro de hoy para ver recomendaciones.")) : recommendations.map((r) => (React.createElement("div", { key: r.key, className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 flex gap-4" },
+                    recommendations.length === 0 ? (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 text-sm text-slate-400" }, "Completa tu registro de hoy para ver recomendaciones.")) : recommendations.map((r) => (React.createElement("div", { key: r.key, className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 flex gap-4" },
                         React.createElement("div", { className: "font-mono text-2xl shrink-0 w-12 text-center", style: { color: scoreColor(r.value) } }, Math.round(r.value)),
                         React.createElement("div", null,
                             React.createElement("div", { className: "text-sm text-slate-100 font-medium" }, r.title),
@@ -2134,13 +2134,13 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                         React.createElement("span", { className: "text-sm text-slate-200" }, "Recomendaciones personalizadas por categor\u00EDa"),
                         React.createElement("div", { className: "flex flex-wrap items-center justify-center gap-1.5" }, tierUpgradeButtons("sm")))))),
             activeTab === "nutricion" && React.createElement("section", null,
-                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Nutrici\u00F3n sugerida seg\u00FAn tu objetivo"),
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400 mb-4" }, "Nutrici\u00F3n sugerida seg\u00FAn tu objetivo"),
                 nutritionContent),
             activeTab === "suplementos" && React.createElement("section", null,
-                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Suplementos sugeridos"),
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400 mb-4" }, "Suplementos sugeridos"),
                 supplementsContent),
             activeTab === "inicio" && React.createElement("section", null,
-                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-500 mb-4" }, "Hist\u00F3rico (\u00FAltimos 60 d\u00EDas)"),
+                React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400 mb-4" }, "Hist\u00F3rico (\u00FAltimos 60 d\u00EDas)"),
                 React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 h-64" }, loadingEntries ? (React.createElement("div", { className: "h-full flex items-center justify-center text-slate-600" },
                     React.createElement(Loader2, { size: 20, className: "animate-spin" }))) : chartData.length === 0 ? (React.createElement("div", { className: "h-full flex items-center justify-center text-slate-600 text-sm" }, "A\u00FAn no hay registros. Guarda el de hoy para empezar tu hist\u00F3rico.")) : (React.createElement(SimpleLineChart, { data: chartData })))),
             activeTab === "metas" && React.createElement("section", { className: "bg-gradient-to-br from-[#11161F] to-[#060809] border border-[#1E2535] rounded-2xl p-5" }, isPremium ? (React.createElement("div", { className: "flex items-center justify-between" },
@@ -2149,17 +2149,17 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                         PREMIUM_SOURCE_LABELS[premiumSource] || "Plan Premium",
                         " ",
                         React.createElement(Check, { size: 14, className: "text-[#3DDCFF]" })),
-                    React.createElement("div", { className: "text-xs text-slate-500 mt-0.5" }, premiumSource === "trial" && trialDaysLeft(trialEndsAt) != null
+                    React.createElement("div", { className: "text-xs text-slate-400 mt-0.5" }, premiumSource === "trial" && trialDaysLeft(trialEndsAt) != null
                         ? `Te quedan ${trialDaysLeft(trialEndsAt)} d\u00EDa(s) de prueba.`
                         : "Tienes acceso a recomendaciones personalizadas y exportaci\u00F3n de datos.")),
-                React.createElement("button", { onClick: loadPlan, className: "text-xs text-slate-500 hover:text-slate-300 transition" }, "Actualizar estado"))) : (React.createElement("div", { className: "flex flex-col sm:flex-row sm:items-center justify-between gap-4" },
+                React.createElement("button", { onClick: loadPlan, className: "text-xs text-slate-400 hover:text-slate-300 transition" }, "Actualizar estado"))) : (React.createElement("div", { className: "flex flex-col sm:flex-row sm:items-center justify-between gap-4" },
                 React.createElement("div", null,
                     React.createElement("div", { className: "text-sm text-slate-200" }, "Plan Free"),
-                    React.createElement("div", { className: "text-xs text-slate-500 mt-0.5" }, "Premium: recomendaciones por categor\u00EDa, protocolos personalizados y exportaci\u00F3n de datos.")),
+                    React.createElement("div", { className: "text-xs text-slate-400 mt-0.5" }, "Premium: recomendaciones por categor\u00EDa, protocolos personalizados y exportaci\u00F3n de datos.")),
                 React.createElement("div", { className: "flex flex-col items-end gap-2 shrink-0" },
                     React.createElement("div", { className: "flex flex-wrap justify-end gap-1.5" }, tierUpgradeButtons("lg")),
-                    React.createElement("button", { onClick: loadPlan, className: "text-[11px] text-slate-500 hover:text-slate-300 transition" }, "Ya pagu\u00E9, actualizar estado"),
-                    isNativeApp && React.createElement("button", { onClick: handleRestorePurchases, disabled: restoringPurchases, className: "text-[11px] text-slate-500 hover:text-slate-300 transition" }, restoringPurchases ? "Restaurando..." : "Restaurar compras"))))),
+                    React.createElement("button", { onClick: loadPlan, className: "text-[11px] text-slate-400 hover:text-slate-300 transition" }, "Ya pagu\u00E9, actualizar estado"),
+                    isNativeApp && React.createElement("button", { onClick: handleRestorePurchases, disabled: restoringPurchases, className: "text-[11px] text-slate-400 hover:text-slate-300 transition" }, restoringPurchases ? "Restaurando..." : "Restaurar compras"))))),
             activeTab === "metas" && accountDangerZoneSection)));
 }
 // ---------- Root ----------
