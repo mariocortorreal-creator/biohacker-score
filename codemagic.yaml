@@ -31,6 +31,50 @@ workflows:
     artifacts:
       - android/app/build/outputs/apk/debug/*.apk
 
+  android-release:
+    name: Android Release Build (signed AAB for Play Store)
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    environment:
+      node: 22
+      java: 21
+      groups:
+        - biohacker-score-android-signing
+    cache:
+      cache_paths:
+        - ~/.gradle/caches
+    # No automatic triggering on purpose — this produces a real signed release artifact meant
+    # for Play Store submission, not something to regenerate on every push. Start it manually
+    # from the Codemagic UI/API when a release is actually ready to ship.
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+      - name: Sync web assets into native project
+        script: |
+          mkdir -p www
+          npm run sync
+      - name: Decode signing keystore from secret
+        script: |
+          set -euo pipefail
+          if [ -z "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            echo "ANDROID_KEYSTORE_BASE64 is not set — add the keystore (base64-encoded) plus ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD as secure environment variables in the biohacker-score-android-signing group before running this workflow."
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          cat > android/keystore.properties <<PROPS
+          storeFile=app/release.keystore
+          storePassword=${ANDROID_KEYSTORE_PASSWORD}
+          keyAlias=${ANDROID_KEY_ALIAS}
+          keyPassword=${ANDROID_KEY_PASSWORD}
+          PROPS
+      - name: Build Android release AAB
+        script: |
+          cd android
+          chmod +x gradlew
+          ./gradlew bundleRelease
+    artifacts:
+      - android/app/build/outputs/bundle/release/*.aab
+
   ios-setup:
     name: iOS Project Setup (add + push back)
     max_build_duration: 30

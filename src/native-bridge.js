@@ -5,6 +5,8 @@
 // as a normal global, same as it already does with window.Capacitor (auto-injected natively).
 import { Health } from 'capacitor-health';
 import { Purchases } from '@revenuecat/purchases-capacitor';
+import { InAppReview } from '@capacitor-community/in-app-review';
 
 window.CapacitorHealth = Health;
 window.CapacitorPurchases = Purchases;
+window.CapacitorInAppReview = InAppReview;

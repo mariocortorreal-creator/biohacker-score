@@ -1,9 +1,11 @@
-# Checklist de publicación — estado real (revisado en esta sesión)
+# Checklist de publicación — estado real (última verificación 2026-07-18)
+
+**Nota:** este archivo quedó desactualizado en dos puntos (verificado contra `index.html` y `store/privacy-policy-es.md` reales, no solo memoria) — corregido abajo. Ver `docs/marketing/plan-lanzamiento-30-dias.md` para el plan completo de lanzamiento.
 
 ## Bloqueadores de ingeniería antes de enviar a revisión
 
-- [ ] **Eliminación de cuenta dentro de la app.** Apple exige esto (guideline 5.1.1v) si la app permite crear cuenta — hoy Biohacker Score no lo tiene, solo login/signup. Sin esto, Apple rechaza la app en revisión. No implementado en esta sesión — es una función nueva (borrar `daily_entries`, `profiles`, y el usuario de `auth.users`, esto último requiere una Supabase Edge Function con service role, no se puede hacer desde el cliente con la anon key).
-- [ ] **App Privacy Labels (Apple) / Data Safety form (Google Play).** Como la app recolecta datos de salud (sueño, ejercicio, y opcionalmente Health/Health Connect), ambas tiendas exigen declarar explícitamente qué se recolecta y para qué. Health data en Apple específicamente activa requisitos extra de revisión — dejar tiempo de sobra en el timeline.
+- [x] **Eliminación de cuenta dentro de la app.** ~~Apple exige esto (guideline 5.1.1v)~~ **Ya implementado** (2026-07-15): Edge Function `delete-account` con service role + UI de zona de peligro en la pestaña "Metas" (flujo de 3 pasos: advertencia → escribir "ELIMINAR" → confirmación), incluye cancelación de la suscripción de Stripe. Confirmado presente en `index.html` (2026-07-18).
+- [ ] **App Privacy Labels (Apple) / Data Safety form (Google Play).** Como la app recolecta datos de salud (sueño, ejercicio, y opcionalmente Health/Health Connect), ambas tiendas exigen declarar explícitamente qué se recolecta y para qué. Health data en Apple específicamente activa requisitos extra de revisión — dejar tiempo de sobra en el timeline. **Sigue pendiente** — se llena directo en App Store Connect/Play Console, requiere que las cuentas de developer existan primero.
 
 ## Fase D — Investigación de comisiones por pago externo (2026-07-08)
 
@@ -25,6 +27,7 @@
 
 ## Assets — ver `listing-es.md` y `privacy-policy-es.md` en esta misma carpeta
 
-- [x] Descripción de tienda (borrador en español) — `listing-es.md`
-- [x] Política de privacidad (borrador) — `privacy-policy-es.md`, **falta completar los `[corchetes]` y publicarla en una URL pública real** antes de poder usarla en las fichas de tienda
-- [ ] Ícono y capturas de pantalla — requieren la app corriendo en un dispositivo/emulador real; no se pudieron generar en esta sesión (sin Android SDK/emulador disponible en este entorno)
+- [x] Descripción de tienda (en español, optimizada para ASO) — `listing-es.md`
+- [x] Política de privacidad — **completa y en vivo**, ya no tiene `[corchetes]` pendientes (email de soporte, dirección, edad mínima 13 años llenados por Mario entre sesiones), confirmado sirviendo en `https://biohackerlatino.com/privacidad/`. ~~falta completar~~ corregido, este ítem estaba desactualizado.
+- [x] Ícono de la app — `assets/icon-only.png` (cerebro wireframe 3D, coincide con la marca) ya existe.
+- [ ] Capturas de pantalla — requieren la app corriendo en un dispositivo/emulador real; no se pueden generar desde este entorno de desarrollo (sin Android SDK/emulador). **Bloqueador real para publicar**, no solo para el ranking — ver plan de lanzamiento.

@@ -75,6 +75,7 @@ const REVENUECAT_API_KEYS = {
     android: "REPLACE_WITH_REVENUECAT_ANDROID_PUBLIC_KEY",
 };
 const SESSION_KEY = "biohacker_score_session";
+const REVIEW_PROMPT_KEY = "biohacker_score_review_prompted";
 // window.Capacitor is injected automatically by the native app shell (Android/iOS) at page load;
 // it's simply undefined in a plain browser, which is exactly the signal used to hide native-only UI.
 const isNativeApp = typeof window !== "undefined" && !!window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform();
@@ -1771,6 +1772,17 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     const recommendations = useMemo(() => buildRecommendations(todayScores), [todayScores]);
     const weakestKey = recommendations.length > 0 ? recommendations[0].key : null;
     const streak = useMemo(() => computeStreak(entries), [entries]);
+    useEffect(() => {
+        // Ask for a store rating at a genuine moment of satisfaction (a 3-day streak), not on
+        // first load. The OS-level API (SKStoreReviewController / Android ReviewManager) already
+        // throttles how often the prompt can actually appear regardless of how often this is
+        // called, but the localStorage flag keeps this component from re-calling it every render.
+        if (!isNativeApp || !window.CapacitorInAppReview) return;
+        if (streak < 3) return;
+        if (localStorage.getItem(REVIEW_PROMPT_KEY)) return;
+        localStorage.setItem(REVIEW_PROMPT_KEY, "1");
+        window.CapacitorInAppReview.requestReview().catch((e) => console.error("No se pudo mostrar el prompt de reseña:", e));
+    }, [streak]);
     const weekly = useMemo(() => weeklyComparison(entries, goals), [entries, goals]);
     const categories = [
         { key: "sleep", label: "Sueño", value: todayScores.sleep, color: "#3DDCFF" },

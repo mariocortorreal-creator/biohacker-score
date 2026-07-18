@@ -1,15 +1,23 @@
-# Ficha de tienda (App Store + Google Play) — borrador
+# Ficha de tienda (App Store + Google Play) — optimizada para ASO (2026-07-18)
 
-## Nombre de la app
-Biohacker Score
+**Nota de proceso:** los límites de caracteres/bytes de abajo están contados a mano — App Store Connect y Play Console muestran un contador en vivo, verificar ahí antes de publicar (no confiar el byte exacto a un conteo manual).
 
-## Subtítulo / short description (Google Play, máx. 80 caracteres)
+## Nombre de la app (App Store: 30 car. máx. · Google Play: 30 car. máx.)
+**Biohacker Score: Sueño, Ayuno** (~29 car.)
+
+Antes era solo "Biohacker Score" — desperdiciaba 15 de los 30 caracteres indexables. En Apple, el nombre + subtítulo + campo de keywords se indexan juntos y cada palabra solo cuenta una vez, así que cada campo debe traer palabras *distintas*.
+
+## Subtítulo (App Store, 30 car. máx. — campo nuevo, no existía en el borrador anterior)
+**Ejercicio, estrés y hábitos** (~27 car.)
+
+## Short description (Google Play, 80 car. máx.)
 Tu score diario de sueño, ayuno, ejercicio y estrés — con coach opcional
+*(sin cambios, ya estaba dentro del límite y con buena densidad de keywords)*
 
-## Descripción corta (App Store, máx. 170 caracteres, opcional)
+## Descripción corta (App Store, 170 car., opcional — "promotional text", no afecta búsqueda pero sí conversión, editable sin subir versión nueva)
 Registra tu día, mira tu Biohacker Score y recibe recomendaciones para mejorar sueño, nutrición, ejercicio y estrés.
 
-## Descripción completa
+## Descripción completa (Google Play indexa esto — hasta 4,000 car.; App Store NO lo indexa para búsqueda, solo importa para conversión)
 
 Biohacker Score convierte tus hábitos diarios en un solo número que puedes mejorar cada día.
 
@@ -27,12 +35,17 @@ La app calcula tu Score de hoy, te muestra tu racha de días consecutivos y tu p
 
 **Conecta tu Apple Health / Google Health Connect** (en la app nativa) para traer automáticamente tus minutos de ejercicio del día — tú confirmas antes de guardar.
 
+Biohacker Score es para quien quiere mejorar su salud con hábitos reales, no con moda: sueño de calidad, ayuno intermitente bien hecho, una rutina de ejercicio sostenible y menos estrés — todo con evidencia, en español.
+
 ## Categoría sugerida
 - App Store: Salud y forma física (Health & Fitness)
 - Google Play: Salud y bienestar (Health & Fitness)
 
-## Palabras clave (App Store, máx. 100 caracteres, separadas por comas)
-sueño,ayuno,ejercicio,estrés,coach,rutina,macros,salud,fitness,hábitos
+## Palabras clave (App Store, campo oculto, 100 **bytes** máx. — no chars; á/é/í/ó/ú/ñ pesan 2 bytes cada una. Sin espacios después de las comas. **No repetir ninguna palabra que ya esté en el nombre o el subtítulo** — Apple la indexa una sola vez, repetirla desperdicia espacio.)
+
+`coach,rutina,macros,salud,fitness,nutrición,racha,progreso,metas,gimnasio`
+
+*(quité sueño/ayuno/ejercicio/estrés/hábitos de aquí porque ya viven en el nombre + subtítulo; agregué nutrición, racha, progreso, metas, gimnasio — conceptos reales de la app que todavía no estaban cubiertos en ningún campo)*
 
 ## Assets pendientes (no generados en esta sesión — requieren la app corriendo en un dispositivo/emulador real)
 - [ ] Ícono de la app: 1024×1024 px (App Store), 512×512 px (Google Play) — sin transparencia, sin bordes redondeados (las tiendas los aplican)
