@@ -4,50 +4,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository overview
 
-The app itself is still a single hand-authored file: `index.html`. There is no build step for it, no bundler, no test suite — the entire app (markup, styles, and a React app written with `React.createElement` calls, no JSX) lives in that one file, and edits should keep working exactly the same way they always have: open `index.html`, edit, done.
-
-Runtime dependencies are loaded from CDNs directly in `<head>`:
-- Tailwind CSS via the Tailwind CDN script (`cdn.tailwindcss.com`)
-- React 18 + ReactDOM via unpkg UMD builds
-- Google Fonts (Inter, Space Grotesk, JetBrains Mono)
+The app itself is still a single hand-authored file: `index.html`. There is no build step for it, no bundler — the entire app (markup, styles, and a React app written with `React.createElement` calls, no JSX) lives in that one file, and edits should keep working exactly the same way they always have: open `index.html`, edit, done. Runtime dependencies (Tailwind, React, fonts) are loaded from CDNs directly in `<head>`.
 
 The `React.createElement(...)` call style (including the `void 0`-style optional-chaining downlevel patterns, e.g. `(_a = x) !== null && _a !== void 0 ? _a : y`) indicates this file's script was compiled/transpiled from JSX+TS and then pasted in — there is no source `.tsx` file in this repo, only the compiled output. When editing, keep new code consistent with this same `React.createElement` style (no JSX) unless the user sets up an actual build pipeline.
 
 ### Native app wrapper (Capacitor)
 
-As of the Capacitor migration, this repo is *also* an npm project (`package.json`) wrapping `index.html` for iOS/Android distribution via [Capacitor](https://capacitorjs.com). This is additive — it does not change how you edit `index.html` day to day:
-
-- `capacitor.config.json` — `appId: com.biohackerlatino.app`, `webDir: www`
-- `www/` — **generated**, a copy of `index.html` + the built `native-bridge.js`. Never hand-edit files in here; they get overwritten.
-- `android/` — the native Android project (tracked; this is where `AndroidManifest.xml` permissions etc. live). `ios/` will appear here once `npx cap add ios` is run (planned, pending a Mac/Codemagic — see below).
-- `src/native-bridge.js` — source for the *only* bundled JS in this repo. Capacitor plugins (like `capacitor-health`) are npm packages that call `registerPlugin()` from `@capacitor/core`, which needs a real module bundler to run — that's what this file is for. It's bundled with esbuild into `native-bridge.js` (iife, no module system) and loaded via a plain `<script>` tag in `index.html`, so the main app script is completely unaffected and stays plain globals (`window.CapacitorHealth`), same as it already does with `window.Capacitor` (auto-injected by the native shell).
-- **After editing `index.html`, run `npm run sync`** before testing a native build — it copies `index.html` → `www/`, rebuilds `native-bridge.js`, and runs `npx cap sync` to push both into `android/` (and `ios/` once added). Skip this if you're just testing in a plain browser (see below).
-- `isNativeApp` (defined near the top of `index.html`'s script) is `true` only inside the native app shell (`window.Capacitor.isNativePlatform()`), `false`/undefined in a plain browser. Gate any native-only UI (health sync, etc.) behind it — the same pattern already used for `isPremium &&`.
-- Building the native Android app requires Android Studio (JDK + Android SDK) locally — not installed in every dev environment. iOS requires a Mac or a CI service; this project uses **Codemagic** (free tier: 500 macOS build-minutes/month) since Mario develops on Windows.
+This repo is *also* an npm project wrapping `index.html` for iOS/Android distribution via Capacitor — additive, doesn't change day-to-day `index.html` editing. For sync steps, `native-bridge.js`, and Codemagic details, see the `native-build` skill.
 
 ## Running / testing changes
 
 There is still no dev server or build command for the app itself. To try changes:
 - Open `index.html` directly in a browser, or serve the directory with any static file server (e.g. `python -m http.server` or `npx serve`) since it makes cross-origin fetches to Supabase.
-- To test inside the native wrapper: `npm run sync`, then `npx cap open android` (opens Android Studio) or `npx cap run android` if a device/emulator is already set up.
-- There are no automated tests or linters configured in this repo.
+- To test inside the native wrapper, see the `native-build` skill.
+- `npm test` runs the test suite (Node's built-in test runner, `test/*.test.js`/`.mjs`); `npm run lint` runs ESLint.
 
 ## Architecture
 
 Everything is in `index.html`, organized top-to-bottom as:
 
-1. **Config constants** — `SUPABASE_URL`, `ANON_KEY`, `AUTH`/`REST` base URLs, `STRIPE_PAYMENT_LINK`, `SESSION_KEY` (localStorage key). The Supabase anon key is a public client-side key by design (RLS enforces access control server-side).
-2. **Icons** — small inline SVG icon components (`Moon`, `Flame`, `Activity`, `Brain`, etc.) built on a shared `Icon` wrapper, avoiding an external icon library.
-3. **Scoring engine** — pure functions with no side effects:
-   - `sleepScore`, `nutritionScore`, `exerciseScore`, `stressScore` each take raw daily inputs plus a per-user goal and return a 0–100 score.
-   - `totalScore` averages the four category scores (ignoring nulls).
-   - `scoreColor` maps a score to a UI color band.
-   - `DEFAULT_GOALS` holds fallback goal values when a user has no custom goals saved.
-4. **Streaks & weekly comparison** — `computeStreak` (consecutive-day streak from `daily_entries`) and `weeklyComparison` (this week's average vs. last week's, for the premium insights card).
-5. **Recommendation engine** — `tier()` buckets a score into `low`/`mid`/`high`; `RECS` holds the Spanish-language copy per category/tier; `buildRecommendations` sorts categories weakest-first and attaches the recommendation copy. `PROTOCOLS` holds the 7-day premium protocol text per category, shown by `ProtocolCard` for the user's weakest category.
-6. **Body composition → nutrition direction** — `goalDirectionFromBody(current, target)` maps the user's saved body-composition stages (1=leanest … 4=highest) to `"cut" | "bulk" | "maintain"` (target lower = cut, higher = bulk, equal = maintain). `CATEGORY_TO_SUPPLEMENT_GOAL` maps the four daily-score categories to `supplement_recommendations.goal_category` values. `adaptiveNoteApplies(goalDirection, today)` decides whether a nutrition row's `adaptive_note` is relevant given today's not-yet-saved slider values (e.g. the "cut" note only shows when today's `stress_level >= 8`).
-7. **UI components** — `SimpleLineChart` (hand-rolled SVG line chart, no chart library), `ScoreRing` (SVG ring segmented into 4 category arcs), `FieldSlider` (labeled range input for one daily metric), `BodySelector`/`BodyImageButton` (before/after body-composition picture picker, images hosted on Cloudinary), `AuthScreen` (Supabase email/password login+signup), `Dashboard` (main app screen — computes `premiumContentSection` as a plain variable before its `return` rather than inlining it in JSX, specifically to keep the deeply-nested `React.createElement` paren-matching tractable by hand), `App` (root: session restore/persist).
-8. **Coach panel components** — `RoutineExerciseRow`/`RoutineBuilder` (exercise-row editor + template picker for composing a routine's `content` array), `RoutineCard` (one coach routine: exercise list + assign-to-client control), `CoachClientsPanel` (roster + add-by-email form), `CoachPanel` (composes the above; takes a single `props` object rather than destructured args because it has ~13 props), `MyRoutinesSection` (client-side read-only view of routines assigned to the current user; returns `null` if there are none, same convention as `ProtocolCard`).
+1. **Config constants** — `SUPABASE_URL`, `ANON_KEY`, `AUTH`/`REST` base URLs, `CLIENT_PLAN_LINKS`/`COACH_PLAN_LINK`, `SESSION_KEY` (localStorage key). The Supabase anon key is a public client-side key by design (RLS enforces access control server-side).
+2. **Icons** — small inline SVG icon components built on a shared `Icon` wrapper, avoiding an external icon library.
+3. **Scoring engine** — pure functions (`sleepScore`, `nutritionScore`, `exerciseScore`, `stressScore`, `totalScore`, `scoreColor`, `DEFAULT_GOALS`).
+4. **Streaks & weekly comparison** — `computeStreak`, `weeklyComparison`.
+5. **Recommendation engine** — `tier`, `RECS`, `buildRecommendations`, `PROTOCOLS`/`ProtocolCard`.
+6. **Body composition → nutrition direction** — `goalDirectionFromBody`, `CATEGORY_TO_SUPPLEMENT_GOAL`, `adaptiveNoteApplies`.
+7. **UI components** — `SimpleLineChart`, `ScoreRing`, `FieldSlider`, `BodySelector`/`BodyImageButton`, `AuthScreen`, `Dashboard`, `App`.
+8. **Coach panel components** — `RoutineExerciseRow`/`RoutineBuilder`, `RoutineCard`, `CoachClientsPanel`, `CoachPanel`, `MyRoutinesSection`.
 
 ## Personas: client vs. coach
 
@@ -78,11 +61,11 @@ Premium status is determined by the Postgres function `public.is_premium(profile
 
 ### Monetization
 
-Upgrade flow is a static Stripe Payment Link (`STRIPE_PAYMENT_LINK`) with `client_reference_id` set to the Supabase user id so payment can be reconciled server-side (reconciliation happens outside this repo — presumably a webhook that sets `profiles.premium_source = 'paid'`, not present here). "Ya pagué, actualizar estado" / "Actualizar estado" buttons just re-run `loadPlan()` (which re-fetches the profile and re-checks `is_premium()`) rather than polling.
+Upgrade flow is a Stripe Payment Link (`CLIENT_PLAN_LINKS`/`COACH_PLAN_LINK`) with `client_reference_id` set to the Supabase user id so payment can be reconciled server-side. Reconciliation happens in this repo's `supabase/functions/stripe-webhook`, which verifies the Stripe signature (see `_shared/stripe-signature.mjs`) and sets `profiles.premium_source = 'paid'`. "Ya pagué, actualizar estado" / "Actualizar estado" buttons just re-run `loadPlan()` (which re-fetches the profile and re-checks `is_premium()`) rather than polling.
 
 ## Conventions to preserve when editing
 
 - UI copy is in Spanish (`lang="es"`); keep new user-facing strings in Spanish for consistency.
-- Color palette is defined ad hoc via hex literals passed as `style`/Tailwind arbitrary values (dark background `#0A0E14`, panel `#11161F`, border `#1E2535`, accent cyan `#3DDCFF`), not a Tailwind theme config — match existing hex values rather than introducing new ones.
+- Color palette is defined ad hoc via hex literals passed as `style`/Tailwind arbitrary values (dark background `#060809`, panel `#11161F`, border `#1E2535`, accent cyan `#3DDCFF`), not a Tailwind theme config — match existing hex values rather than introducing new ones.
 - No component splitting across files — everything stays in the one `<script>` block in `index.html`.
 - When adding a new deeply-nested `React.createElement` tree, don't hand-count parens across 10+ lines of inline nesting — assign the subtree to a `const`/`let` first (see `premiumContentSection` in `Dashboard`) and reference it in the JSX. There's no bundler/TS here to catch a mismatched paren before runtime, and dense nesting makes a stray/missing `)` easy to introduce and hard to spot by eye.
