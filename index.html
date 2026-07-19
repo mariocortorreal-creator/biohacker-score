@@ -580,10 +580,10 @@ function MacroCalculatorCard({ weightDraft, onWeightChange, onSave, saving, macr
     const weightInputRow = React.createElement("div", { className: "flex items-end gap-2 mb-4" },
         React.createElement("label", { className: "flex-1" },
             React.createElement("div", { className: "text-xs text-slate-400 mb-1" }, "Peso corporal (kg)"),
-            React.createElement("input", { type: "number", step: "0.5", min: "20", max: "400", value: weightDraft !== null && weightDraft !== void 0 ? weightDraft : "", onChange: (e) => {
+            React.createElement("input", { type: "number", inputMode: "decimal", step: "0.5", min: "20", max: "400", value: weightDraft !== null && weightDraft !== void 0 ? weightDraft : "", onChange: (e) => {
                     if (e.target.value === "") { onWeightChange(null); return; }
                     const parsed = parseFloat(e.target.value);
-                    onWeightChange(Number.isFinite(parsed) ? Math.min(400, Math.max(20, parsed)) : null);
+                    onWeightChange(Number.isFinite(parsed) ? parsed : null);
                 }, className: "w-full bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
         React.createElement("button", { type: "button", onClick: onSave, disabled: saving || !weightDraft, className: "shrink-0 flex items-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-4 py-2 hover:brightness-110 transition disabled:opacity-40" },
             saving ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : React.createElement(Check, { size: 14 }),
@@ -1650,14 +1650,15 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         setSavingWeight(true);
         setActionError("");
         try {
+            const clampedWeight = Math.min(400, Math.max(20, weightDraft));
             const res = await fetch(`${REST}/profiles?id=eq.${session.user.id}`, {
                 method: "PATCH",
                 headers: { ...authHeaders, Prefer: "return=minimal" },
-                body: JSON.stringify({ weight_kg: weightDraft }),
+                body: JSON.stringify({ weight_kg: clampedWeight }),
             });
             if (!res.ok)
                 throw new Error("No se pudo guardar el peso.");
-            setBodyWeightKg(weightDraft);
+            setBodyWeightKg(clampedWeight);
         }
         catch (e) {
             console.error(e);
