@@ -1168,8 +1168,35 @@ function AdminCoachControls({ user, businessNameDraft, setBusinessNameDraft, onT
             !active && React.createElement("input", { type: "text", value: businessNameDraft, onChange: (e) => setBusinessNameDraft(e.target.value), placeholder: "Nombre de negocio (opcional)", className: "flex-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-[#3DDCFF]" }),
             React.createElement("button", { type: "button", onClick: () => onToggleCoach(!active), disabled: saving, className: "flex items-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-4 py-2 hover:brightness-110 transition disabled:opacity-50" }, saving ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : (active ? "Quitar como coach" : "Hacer coach"))));
 }
+function AdminCreateClientBox({ email, setEmail, fullName, setFullName, premiumSource, setPremiumSource, onCreate, creating, createError, createdMessage }) {
+    return React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 space-y-3" },
+        React.createElement("h3", { className: "text-[11px] uppercase tracking-wider text-slate-400" }, "Agregar cliente nuevo"),
+        React.createElement("div", { className: "text-xs text-slate-500" }, "Crea la cuenta y le manda una invitación por correo para que ponga su propia contraseña — no se registra solo, tú la habilitas."),
+        React.createElement("div", { className: "flex gap-2 flex-wrap" },
+            React.createElement("input", { type: "email", value: email, onChange: (e) => setEmail(e.target.value), placeholder: "correo@clientenuevo.com", "aria-label": "Correo del cliente nuevo", className: "flex-1 min-w-[200px] bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-[#3DDCFF]" }),
+            React.createElement("input", { type: "text", value: fullName, onChange: (e) => setFullName(e.target.value), placeholder: "Nombre (opcional)", "aria-label": "Nombre del cliente nuevo", className: "flex-1 min-w-[160px] bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-[#3DDCFF]" }),
+            React.createElement("select", { value: premiumSource, onChange: (e) => setPremiumSource(e.target.value), className: "bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-[#3DDCFF]" },
+                React.createElement("option", { value: "comp_trainer" }, "Comp (entrenador)"),
+                React.createElement("option", { value: "paid" }, "Paid"),
+                React.createElement("option", { value: "trial" }, "Trial")),
+            React.createElement("button", { type: "button", onClick: onCreate, disabled: creating, className: "flex items-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-4 py-2 hover:brightness-110 transition disabled:opacity-50" }, creating ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : "Crear e invitar")),
+        createError && React.createElement("div", { className: "flex items-start gap-2 text-[#FF6B5E] text-xs bg-[#FF6B5E]/10 border border-[#FF6B5E]/20 rounded-lg px-3 py-2" }, React.createElement(AlertCircle, { size: 14, className: "mt-0.5 shrink-0" }), " ", createError),
+        createdMessage && React.createElement("div", { className: "text-xs text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 rounded-lg px-3 py-2" }, createdMessage));
+}
 function AdminPanel(props) {
     return React.createElement("div", { className: "space-y-6" },
+        React.createElement(AdminCreateClientBox, {
+            email: props.newClientEmail,
+            setEmail: props.setNewClientEmail,
+            fullName: props.newClientFullName,
+            setFullName: props.setNewClientFullName,
+            premiumSource: props.newClientPremiumSource,
+            setPremiumSource: props.setNewClientPremiumSource,
+            onCreate: props.onCreateClient,
+            creating: props.creatingClient,
+            createError: props.createClientError,
+            createdMessage: props.createClientSuccess,
+        }),
         React.createElement(AdminUserSearchBox, { email: props.searchEmail, setEmail: props.setSearchEmail, onSearch: props.onSearch, searching: props.searching, searchError: props.searchError }),
         props.user && React.createElement("div", { className: "space-y-6" },
             React.createElement("div", { className: "text-sm text-slate-200 font-medium" }, props.user.full_name || props.user.email, React.createElement("span", { className: "text-slate-500 font-normal" }, " · ", props.user.email)),
@@ -1271,6 +1298,12 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     const [adminBusinessNameDraft, setAdminBusinessNameDraft] = useState("");
     const [savingAdminCoach, setSavingAdminCoach] = useState(false);
     const [adminActionError, setAdminActionError] = useState("");
+    const [newClientEmail, setNewClientEmail] = useState("");
+    const [newClientFullName, setNewClientFullName] = useState("");
+    const [newClientPremiumSource, setNewClientPremiumSource] = useState("comp_trainer");
+    const [creatingClient, setCreatingClient] = useState(false);
+    const [createClientError, setCreateClientError] = useState("");
+    const [createClientSuccess, setCreateClientSuccess] = useState("");
     const [coachBusinessName, setCoachBusinessName] = useState(null);
     const [coachClients, setCoachClients] = useState([]);
     const [coachRoutines, setCoachRoutines] = useState([]);
@@ -1440,6 +1473,30 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         }
         finally {
             setSavingAdminCoach(false);
+        }
+    }
+    async function handleCreateClient() {
+        setCreatingClient(true);
+        setCreateClientError("");
+        setCreateClientSuccess("");
+        try {
+            const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-create-client`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${session.accessToken}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ email: newClientEmail, full_name: newClientFullName || null, premium_source: newClientPremiumSource }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.created)
+                throw new Error(data.message || "No se pudo crear el cliente.");
+            setCreateClientSuccess(`Invitación enviada a ${data.email}.`);
+            setNewClientEmail("");
+            setNewClientFullName("");
+        }
+        catch (e) {
+            setCreateClientError(e.message);
+        }
+        finally {
+            setCreatingClient(false);
         }
     }
     async function loadMyRoutineAssignments() {
@@ -2461,6 +2518,16 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             activeTab === "admin" && isAdmin && React.createElement("section", null,
                 React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400 mb-4" }, "Admin"),
                 React.createElement(AdminPanel, {
+                    newClientEmail: newClientEmail,
+                    setNewClientEmail: setNewClientEmail,
+                    newClientFullName: newClientFullName,
+                    setNewClientFullName: setNewClientFullName,
+                    newClientPremiumSource: newClientPremiumSource,
+                    setNewClientPremiumSource: setNewClientPremiumSource,
+                    onCreateClient: handleCreateClient,
+                    creatingClient: creatingClient,
+                    createClientError: createClientError,
+                    createClientSuccess: createClientSuccess,
                     searchEmail: adminSearchEmail,
                     setSearchEmail: setAdminSearchEmail,
                     onSearch: handleAdminSearch,
