@@ -1207,16 +1207,26 @@ function AdminPanel(props) {
                 ? React.createElement("div", { className: "flex justify-center p-6" }, React.createElement(Loader2, { size: 18, className: "animate-spin text-slate-600" }))
                 : React.createElement(AdminActivityList, { entries: props.recentEntries })));
 }
-function MyRoutinesSection({ assignments }) {
+function MyRoutinesSection({ assignments, exerciseLibrary }) {
     if (!assignments || assignments.length === 0)
         return null;
+    const videoUrlByName = {};
+    (exerciseLibrary || []).forEach((ex) => {
+        if (ex.video_url) videoUrlByName[ex.name] = ex.video_url;
+    });
     const cards = assignments.map((a) => {
         const routine = a.routines || {};
         const exercises = Array.isArray(routine.content) ? routine.content : [];
+        const exerciseItems = exercises.map((ex, i) => {
+            const videoUrl = videoUrlByName[ex.exercise];
+            return React.createElement("li", { key: i, className: "text-xs text-slate-400" },
+                React.createElement("span", { className: "text-slate-200" }, ex.exercise), ` \u2014 ${ex.sets}x${ex.reps}`, ex.rest_seconds ? `, ${ex.rest_seconds}s descanso` : "",
+                videoUrl && React.createElement("a", { href: videoUrl, target: "_blank", rel: "noopener noreferrer", className: "ml-2 text-[11px] text-[#3DDCFF] hover:brightness-110 transition" }, "Ver c\u00f3mo ejecutarlo"));
+        });
         return React.createElement("div", { key: a.id, className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
             React.createElement("div", { className: "text-sm text-slate-100 font-medium" }, routine.title),
             routine.description && React.createElement("div", { className: "text-xs text-slate-400 mt-0.5" }, routine.description),
-            React.createElement("ul", { className: "mt-3 space-y-1" }, exercises.map((ex, i) => React.createElement("li", { key: i, className: "text-xs text-slate-400" }, React.createElement("span", { className: "text-slate-200" }, ex.exercise), ` \u2014 ${ex.sets}x${ex.reps}`, ex.rest_seconds ? `, ${ex.rest_seconds}s descanso` : ""))),
+            React.createElement("ul", { className: "mt-3 space-y-1" }, exerciseItems),
             a.notes && React.createElement("div", { className: "text-xs text-[#3DDCFF] mt-2" }, a.notes));
     });
     return React.createElement("section", null,
@@ -2480,7 +2490,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             activeTab === "entrenamiento" && !isPremium && React.createElement("section", null,
                 React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400 mb-4" }, "Entrenamiento"),
                 premiumTeaser("Rutina asignada y biblioteca de ejercicios")),
-            activeTab === "entrenamiento" && isPremium && React.createElement(MyRoutinesSection, { assignments: myRoutineAssignments }),
+            activeTab === "entrenamiento" && isPremium && React.createElement(MyRoutinesSection, { assignments: myRoutineAssignments, exerciseLibrary: exerciseLibrary }),
             // Self-service routine generator: only for independent users — premium/trial
             // clients with NO active coach link. A client of an active coach (isCoach
             // false, hasActiveCoach true) never sees this; their coach assigns routines
