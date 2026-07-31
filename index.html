@@ -874,20 +874,48 @@ function ProtocolCard({ categoryKey }) {
                 i + 1),
             React.createElement("span", null, d))))))));
 }
-function AuthScreen({ onAuthed }) {
+function AuthScreen({ onAuthed, initialError }) {
     const startInSignup = typeof window !== "undefined" && window.location.pathname.replace(/\/+$/, "") === "/registro";
     const [mode, setMode] = useState(startInSignup ? "signup" : "login");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
+    const [error, setError] = useState(initialError || "");
     const [info, setInfo] = useState("");
     const particlesCanvasRef = useRef(null);
     useEffect(() => {
         return initAuthParticles(particlesCanvasRef.current, 46);
     }, []);
     async function submit() {
+        if (mode === "recover") {
+            if (!email) {
+                setError("Ingresa tu correo.");
+                return;
+            }
+            setError("");
+            setInfo("");
+            setLoading(true);
+            try {
+                const res = await fetch(`${AUTH}/recover`, {
+                    method: "POST",
+                    headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
+                    body: JSON.stringify({ email }),
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data.error_description || data.msg || "No se pudo enviar el enlace.");
+                }
+                setInfo("Si ese correo tiene una cuenta, te enviamos un enlace para restablecer tu contraseña.");
+            }
+            catch (err) {
+                setError(err.message);
+            }
+            finally {
+                setLoading(false);
+            }
+            return;
+        }
         if (!email || !password) {
             setError("Completa correo y contraseña.");
             return;
@@ -953,11 +981,13 @@ function AuthScreen({ onAuthed }) {
             React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-6 space-y-4" },
                 React.createElement("div", null,
                     React.createElement("label", { className: "text-xs uppercase tracking-wider text-slate-400" }, "Correo"),
-                    React.createElement("input", { type: "email", value: email, onChange: (e) => setEmail(e.target.value), className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF] transition-colors", placeholder: "tu@correo.com" })),
-                React.createElement("div", null,
+                    React.createElement("input", { type: "email", value: email, onChange: (e) => setEmail(e.target.value), onKeyDown: (e) => { if (e.key === "Enter" && mode === "recover")
+                            submit(); }, className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF] transition-colors", placeholder: "tu@correo.com" })),
+                mode !== "recover" && (React.createElement("div", null,
                     React.createElement("label", { className: "text-xs uppercase tracking-wider text-slate-400" }, "Contrase\u00F1a"),
                     React.createElement("input", { type: "password", minLength: 6, value: password, onChange: (e) => setPassword(e.target.value), onKeyDown: (e) => { if (e.key === "Enter" && mode === "login")
-                            submit(); }, className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF] transition-colors", placeholder: "m\u00EDnimo 6 caracteres" })),
+                            submit(); }, className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF] transition-colors", placeholder: "m\u00EDnimo 6 caracteres" }))),
+                mode === "login" && (React.createElement("button", { type: "button", onClick: () => { setMode("recover"); setError(""); setInfo(""); }, className: "text-xs text-[#3DDCFF] hover:brightness-110 transition" }, "\u00BFOlvidaste tu contrase\u00F1a?")),
                 mode === "signup" && (React.createElement("div", null,
                     React.createElement("label", { className: "text-xs uppercase tracking-wider text-slate-400" }, "Confirmar contrase\u00F1a"),
                     React.createElement("input", { type: "password", minLength: 6, value: confirmPassword, onChange: (e) => setConfirmPassword(e.target.value), onKeyDown: (e) => { if (e.key === "Enter")
@@ -970,8 +1000,68 @@ function AuthScreen({ onAuthed }) {
                     React.createElement(Check, { size: 14, className: "mt-0.5 shrink-0" }),
                     " ",
                     info)),
-                React.createElement("button", { type: "button", onClick: submit, disabled: loading, className: "w-full flex items-center justify-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg py-2.5 hover:brightness-110 transition disabled:opacity-50" }, loading ? React.createElement(Loader2, { size: 16, className: "animate-spin" }) : mode === "login" ? "Entrar" : "Crear cuenta")),
-            React.createElement("button", { onClick: () => { setMode(mode === "login" ? "signup" : "login"); setError(""); setInfo(""); setConfirmPassword(""); }, className: "w-full text-center text-xs text-slate-400 mt-4 hover:text-slate-300 transition" }, mode === "login" ? "¿No tienes cuenta? Crea una" : "¿Ya tienes cuenta? Inicia sesión"))));
+                React.createElement("button", { type: "button", onClick: submit, disabled: loading, className: "w-full flex items-center justify-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg py-2.5 hover:brightness-110 transition disabled:opacity-50" }, loading ? React.createElement(Loader2, { size: 16, className: "animate-spin" }) : mode === "login" ? "Entrar" : mode === "signup" ? "Crear cuenta" : "Enviar enlace")),
+            React.createElement("button", { onClick: () => { setMode(mode === "recover" ? "login" : mode === "login" ? "signup" : "login"); setError(""); setInfo(""); setConfirmPassword(""); }, className: "w-full text-center text-xs text-slate-400 mt-4 hover:text-slate-300 transition" }, mode === "recover" ? "Volver a iniciar sesión" : mode === "login" ? "¿No tienes cuenta? Crea una" : "¿Ya tienes cuenta? Inicia sesión"))));
+}
+function ResetPasswordScreen({ accessToken, refreshToken, user, onDone }) {
+    const [password, setPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+    const particlesCanvasRef = useRef(null);
+    useEffect(() => {
+        return initAuthParticles(particlesCanvasRef.current, 46);
+    }, []);
+    async function submit() {
+        if (!password || password.length < 6) {
+            setError("La contraseña debe tener al menos 6 caracteres.");
+            return;
+        }
+        if (password !== confirmPassword) {
+            setError("Las contraseñas no coinciden.");
+            return;
+        }
+        setError("");
+        setLoading(true);
+        try {
+            const res = await fetch(`${AUTH}/user`, {
+                method: "PUT",
+                headers: { apikey: ANON_KEY, Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ password }),
+            });
+            const data = await res.json();
+            if (!res.ok)
+                throw new Error(data.error_description || data.msg || "No se pudo actualizar la contraseña.");
+            onDone({ accessToken, refreshToken, user: data });
+        }
+        catch (err) {
+            setError(err.message);
+        }
+        finally {
+            setLoading(false);
+        }
+    }
+    return (React.createElement("div", { className: "min-h-screen flex items-center justify-center px-6 relative overflow-hidden", style: { background: "radial-gradient(circle at 50% 20%, rgba(61,220,255,0.08), transparent 60%), #060809" } },
+        React.createElement("canvas", { ref: particlesCanvasRef, className: "absolute inset-0 w-full h-full pointer-events-none", "aria-hidden": "true" }),
+        React.createElement("div", { className: "w-full max-w-sm relative z-10" },
+            React.createElement("div", { className: "mb-8 text-center" },
+                React.createElement("div", { className: "inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#11161F] border border-[#1E2535] mb-4" },
+                    React.createElement(Activity, { size: 22, className: "text-[#3DDCFF]" })),
+                React.createElement("h1", { className: "font-display text-2xl text-slate-100 tracking-tight" }, "Nueva contraseña"),
+                React.createElement("p", { className: "text-slate-400 text-sm mt-1" }, user?.email ? `Para ${user.email}` : "Elige una nueva contraseña")),
+            React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-6 space-y-4" },
+                React.createElement("div", null,
+                    React.createElement("label", { className: "text-xs uppercase tracking-wider text-slate-400" }, "Nueva contraseña"),
+                    React.createElement("input", { type: "password", minLength: 6, value: password, onChange: (e) => setPassword(e.target.value), className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF] transition-colors", placeholder: "mínimo 6 caracteres" })),
+                React.createElement("div", null,
+                    React.createElement("label", { className: "text-xs uppercase tracking-wider text-slate-400" }, "Confirmar contraseña"),
+                    React.createElement("input", { type: "password", minLength: 6, value: confirmPassword, onChange: (e) => setConfirmPassword(e.target.value), onKeyDown: (e) => { if (e.key === "Enter")
+                            submit(); }, className: "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF] transition-colors", placeholder: "repite tu contraseña" })),
+                error && (React.createElement("div", { className: "flex items-start gap-2 text-[#FF6B5E] text-xs bg-[#FF6B5E]/10 border border-[#FF6B5E]/20 rounded-lg px-3 py-2" },
+                    React.createElement(AlertCircle, { size: 14, className: "mt-0.5 shrink-0" }),
+                    " ",
+                    error)),
+                React.createElement("button", { type: "button", onClick: submit, disabled: loading, className: "w-full flex items-center justify-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg py-2.5 hover:brightness-110 transition disabled:opacity-50" }, loading ? React.createElement(Loader2, { size: 16, className: "animate-spin" }) : "Guardar nueva contraseña")))));
 }
 function BodyImageButton({ item, selected, onClick, accent }) {
     return (React.createElement("button", { onClick: onClick, type: "button", className: `relative rounded-2xl overflow-hidden border-2 transition ${selected ? "" : "border-[#1E2535] opacity-70 hover:opacity-100"}`, style: selected ? { borderColor: accent, boxShadow: `0 0 0 1px ${accent}` } : {} },
@@ -2857,6 +2947,30 @@ function cachedFetchJSON(cacheKey, url, headers, ttlMs = STATIC_CACHE_TTL_MS, st
 function App() {
     const [session, setSession] = useState(null);
     const [restoring, setRestoring] = useState(true);
+    const [recovery, setRecovery] = useState(null);
+    const [recoveryError, setRecoveryError] = useState("");
+    useEffect(() => {
+        if (typeof window === "undefined" || !window.location.hash)
+            return;
+        const params = new URLSearchParams(window.location.hash.slice(1));
+        if (params.get("type") !== "recovery" || !params.get("access_token"))
+            return;
+        const accessToken = params.get("access_token");
+        const refreshToken = params.get("refresh_token");
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+        (async () => {
+            try {
+                const res = await fetch(`${AUTH}/user`, { headers: { apikey: ANON_KEY, Authorization: `Bearer ${accessToken}` } });
+                const user = await res.json();
+                if (!res.ok)
+                    throw new Error(user.error_description || user.msg || "El enlace de recuperación no es válido o expiró.");
+                setRecovery({ accessToken, refreshToken, user });
+            }
+            catch (e) {
+                setRecoveryError(e.message);
+            }
+        })();
+    }, []);
     useEffect(() => {
         (async () => {
             try {
@@ -2894,7 +3008,7 @@ function App() {
     function handleAuthed(s) { persistSession(s); setSession(s); }
     function handleLogout() { localStorage.removeItem(SESSION_KEY); setSession(null); }
     return (React.createElement(React.Fragment, null, restoring ? (React.createElement("div", { className: "min-h-screen bg-[#060809] flex items-center justify-center" },
-        canMountMitoLoader ? React.createElement(MitoLoader, null) : React.createElement(Loader2, { size: 22, className: "animate-spin text-[#3DDCFF]" }))) : !session ? (React.createElement(AuthScreen, { onAuthed: handleAuthed })) : (React.createElement(Dashboard, { session: session, onLogout: handleLogout, onRefreshSession: async () => {
+        canMountMitoLoader ? React.createElement(MitoLoader, null) : React.createElement(Loader2, { size: 22, className: "animate-spin text-[#3DDCFF]" }))) : (!session && recovery) ? (React.createElement(ResetPasswordScreen, { accessToken: recovery.accessToken, refreshToken: recovery.refreshToken, user: recovery.user, onDone: (s) => { setRecovery(null); handleAuthed(s); } })) : !session ? (React.createElement(AuthScreen, { onAuthed: handleAuthed, initialError: recoveryError })) : (React.createElement(Dashboard, { session: session, onLogout: handleLogout, onRefreshSession: async () => {
             try {
                 const fresh = await refreshSession(session.refreshToken);
                 persistSession(fresh);
