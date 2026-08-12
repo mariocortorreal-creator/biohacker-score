@@ -262,6 +262,12 @@ const Trash2 = (p) => React.createElement(Icon, { ...p },
 const Camera = (p) => React.createElement(Icon, { ...p },
     React.createElement("path", { d: "M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" }),
     React.createElement("circle", { cx: "12", cy: "13", r: "4" }));
+const Share2 = (p) => React.createElement(Icon, { ...p },
+    React.createElement("circle", { cx: "18", cy: "5", r: "3" }),
+    React.createElement("circle", { cx: "6", cy: "12", r: "3" }),
+    React.createElement("circle", { cx: "18", cy: "19", r: "3" }),
+    React.createElement("line", { x1: "8.59", y1: "13.51", x2: "15.42", y2: "17.49" }),
+    React.createElement("line", { x1: "15.41", y1: "6.51", x2: "8.59", y2: "10.49" }));
 // ---------- Scoring engine ----------
 function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
 const DEFAULT_GOALS = { sleepHours: 8, fastingHours: 16, exerciseMinutes: 45, stressMax: 3 };
@@ -379,6 +385,41 @@ function weeklyComparison(entries, goals) {
     const lastAvg = avg(lastWeek);
     const deltaPct = lastAvg === 0 ? null : ((thisAvg - lastAvg) / lastAvg) * 100;
     return { thisAvg, lastAvg, deltaPct };
+}
+// Which of the four pillars improved the most vs. last week — used by the weekly
+// share card so it can point at a specific win instead of just the total score.
+function bestImprovedCategory(entries, goals) {
+    if (!entries || entries.length === 0)
+        return null;
+    const scored = entries.map((e) => ({
+        date: e.entry_date,
+        sleep: sleepScore(e.sleep_hours, e.sleep_quality, goals.sleepHours),
+        nutrition: nutritionScore(e.fasting_hours, e.nutrition_quality, goals.fastingHours),
+        exercise: exerciseScore(e.exercise_minutes, e.exercise_intensity, goals.exerciseMinutes),
+        stress: stressScore(e.stress_level, goals.stressMax),
+    }));
+    const sorted = [...scored].sort((a, b) => (a.date < b.date ? 1 : -1));
+    const thisWeek = sorted.slice(0, 7);
+    const lastWeek = sorted.slice(7, 14);
+    if (thisWeek.length === 0 || lastWeek.length === 0)
+        return null;
+    const avgFor = (arr, key) => {
+        const vals = arr.map((e) => e[key]).filter((v) => v != null);
+        if (vals.length === 0)
+            return null;
+        return vals.reduce((a, b) => a + b, 0) / vals.length;
+    };
+    let best = null;
+    for (const key of ["sleep", "nutrition", "exercise", "stress"]) {
+        const thisAvg = avgFor(thisWeek, key);
+        const lastAvg = avgFor(lastWeek, key);
+        if (thisAvg == null || lastAvg == null)
+            continue;
+        const delta = thisAvg - lastAvg;
+        if (delta > 0 && (best == null || delta > best.delta))
+            best = { key, delta };
+    }
+    return best ? best.key : null;
 }
 // ---------- Recommendation engine ----------
 function tier(v) {
@@ -561,6 +602,103 @@ function ScoreRing({ categories, total }) {
         React.createElement("div", { className: "absolute inset-0 flex flex-col items-center justify-center" },
             React.createElement("span", { className: "font-mono text-5xl font-semibold tracking-tight", style: { color: scoreColor(total) } }, total != null ? Math.round(total) : "--"),
             React.createElement("span", { className: "text-[11px] uppercase tracking-[0.2em] text-slate-400 mt-1" }, "Score de hoy"))));
+}
+// Renders the shareable weekly-recap image (Instagram Story ratio) on an offscreen
+// canvas — kept as a plain function, not a component, since it's only ever invoked
+// once at share time rather than re-rendered.
+function drawWeeklyShareCanvas({ total, deltaPoints, streak, topCategoryLabel }) {
+    const canvas = document.createElement("canvas");
+    const W = 1080, H = 1920;
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, "#0B1420");
+    bg.addColorStop(1, "#060809");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#3DDCFF";
+    ctx.font = "600 34px system-ui, -apple-system, sans-serif";
+    ctx.fillText("BIOHACKER SCORE", W / 2, 570);
+    ctx.fillStyle = scoreColor(total) || "#3DDCFF";
+    ctx.font = "700 260px system-ui, -apple-system, sans-serif";
+    ctx.fillText(String(total != null ? Math.round(total) : "--"), W / 2, 970);
+    ctx.font = "400 32px system-ui, -apple-system, sans-serif";
+    ctx.fillStyle = "#8B96A8";
+    ctx.fillText("SCORE DE HOY", W / 2, 1040);
+    const deltaColor = deltaPoints >= 0 ? "#7FE3A3" : "#FF6B5E";
+    ctx.fillStyle = deltaColor;
+    ctx.font = "600 60px system-ui, -apple-system, sans-serif";
+    ctx.fillText(`${deltaPoints >= 0 ? "▲" : "▼"} ${Math.abs(deltaPoints)} pts esta semana`, W / 2, 1200);
+    ctx.fillStyle = "#E8EDF4";
+    ctx.font = "600 56px system-ui, -apple-system, sans-serif";
+    ctx.fillText(`🔥 ${streak} días seguidos`, W / 2, 1330);
+    if (topCategoryLabel) {
+        ctx.fillStyle = "#C792FF";
+        ctx.font = "500 44px system-ui, -apple-system, sans-serif";
+        ctx.fillText(`${topCategoryLabel} — tu mayor mejora`, W / 2, 1420);
+    }
+    ctx.fillStyle = "#5C6579";
+    ctx.font = "400 30px system-ui, -apple-system, sans-serif";
+    ctx.fillText("biohackerlatino.com", W / 2, H - 120);
+    return canvas;
+}
+async function shareWeeklyCard({ total, deltaPoints, streak, topCategoryLabel }) {
+    const canvas = drawWeeklyShareCanvas({ total, deltaPoints, streak, topCategoryLabel });
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!blob)
+        return;
+    const shareText = `Tu Biohacker Score subió ${deltaPoints >= 0 ? "+" : ""}${deltaPoints} puntos esta semana. ${streak} días seguidos cuidando tu salud. 🧠🔥`;
+    const file = new File([blob], "biohacker-score-semana.png", { type: "image/png" });
+    if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+        try {
+            await navigator.share({ files: [file], title: "Mi Biohacker Score", text: shareText });
+            return;
+        }
+        catch (e) {
+            if (e && e.name === "AbortError")
+                return; // user closed the native share sheet — not an error
+            console.error("No se pudo compartir vía navigator.share:", e);
+        }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "biohacker-score-semana.png";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+// The client-side share moment: only appears on the exact day a >=7-day streak
+// lands on a multiple of 7 AND the weekly average improved vs. the prior week —
+// evidence the effort worked, not a generic streak nag. Free and premium alike,
+// since restricting a growth mechanic to paying users defeats its purpose.
+function WeeklyShareCard({ total, weekly, streak, topCategoryLabel }) {
+    const [sharing, setSharing] = useState(false);
+    if (!weekly || weekly.deltaPct == null || weekly.deltaPct <= 0)
+        return null;
+    if (streak <= 0 || streak % 7 !== 0)
+        return null;
+    const deltaPoints = Math.round(weekly.thisAvg - weekly.lastAvg);
+    async function handleShare() {
+        setSharing(true);
+        try {
+            await shareWeeklyCard({ total, deltaPoints, streak, topCategoryLabel });
+        }
+        finally {
+            setSharing(false);
+        }
+    }
+    return (React.createElement("div", { className: "bg-gradient-to-br from-[#3DDCFF]/10 to-[#11161F] border border-[#3DDCFF]/25 rounded-2xl p-4 mt-4 w-full max-w-md text-center" },
+        React.createElement("div", { className: "text-[10px] uppercase tracking-[0.2em] text-[#3DDCFF] mb-1.5" }, "Resumen de tu semana"),
+        React.createElement("div", { className: "text-sm text-slate-200 leading-relaxed" },
+            "Score ",
+            React.createElement("span", { className: "font-mono text-[#7FE3A3]" }, `+${deltaPoints}`),
+            ` esta semana · ${streak} días seguidos`,
+            topCategoryLabel ? ` · ${topCategoryLabel} mejoró más` : ""),
+        React.createElement("button", { type: "button", onClick: handleShare, disabled: sharing, className: "mt-3 flex items-center justify-center gap-2 mx-auto bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-5 py-2 hover:brightness-110 transition disabled:opacity-50" }, sharing ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : React.createElement(Share2, { size: 14 }), "Compartir mi semana")));
 }
 function FieldSlider({ icon: IconCmp, label, unit, value, onChange, min, max, step, color }) {
     return (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
@@ -1628,7 +1766,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                 body: JSON.stringify({
                     p_user_id: adminFoundUser.id,
                     p_premium_source: adminDraftPremiumSource,
-                    p_trial_ends_at: adminDraftPremiumSource === "trial" && adminDraftTrialEndsAt ? new Date(adminDraftTrialEndsAt).toISOString() : null,
+                    p_trial_ends_at: adminDraftPremiumSource === "trial" && adminDraftTrialEndsAt ? new Date(`${adminDraftTrialEndsAt}T23:59:59.999Z`).toISOString() : null,
                 }),
             });
             const data = await res.json().catch(() => null);
@@ -2386,6 +2524,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         window.CapacitorInAppReview.requestReview().catch((e) => console.error("No se pudo mostrar el prompt de reseña:", e));
     }, [streak]);
     const weekly = useMemo(() => weeklyComparison(entries, goals), [entries, goals]);
+    const shareTopCategoryKey = useMemo(() => bestImprovedCategory(entries, goals), [entries, goals]);
     const categories = [
         { key: "sleep", label: "Sueño", value: todayScores.sleep, color: "#3DDCFF" },
         { key: "nutrition", label: "Ayuno / Nutrición", value: todayScores.nutrition, color: "#7FE3A3" },
@@ -2673,6 +2812,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                     React.createElement("span", null, "\uD83D\uDD25"),
                     React.createElement("span", { className: "font-mono text-slate-200" }, streak),
                     React.createElement("span", { className: "text-slate-400" }, streak === 1 ? "día seguido" : "días seguidos"))),
+                React.createElement(WeeklyShareCard, { total: total, weekly: weekly, streak: streak, topCategoryLabel: shareTopCategoryKey ? CATEGORY_LABELS[shareTopCategoryKey] : null }),
                 React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-4 gap-3 mt-8 w-full max-w-md" }, categories.map((c) => (React.createElement("div", { key: c.key, className: "text-center" },
                     React.createElement("div", { className: "font-mono text-lg", style: { color: scoreColor(c.value) } }, c.value != null ? Math.round(c.value) : "--"),
                     React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-400 mt-0.5" }, c.label)))))),
