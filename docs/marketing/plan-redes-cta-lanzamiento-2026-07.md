@@ -64,7 +64,7 @@ Esto se apoya en el pilar de contenido ya definido en `plan-contenido-video-inve
 
 | Semana | Contenido | Objetivo |
 |---|---|---|
-| 1 (esta semana) | 1-2 Reels "detrás de cámara": Mario contando por qué construyó Biohacker Score — historia personal, no venta directa | Presentar la app sin sonar a anuncio; aprovechar que el 88% del alcance ya es gente que no lo sigue |
+| 1 (esta semana) | 1-2 Reels "detrás de cámara" — el problema real que ve en sus clientes (falta de un número real de dónde están parados), **sin mencionar la app todavía** (corregido 19 jul: es prematuro anunciarla antes de que esté publicada en tienda) | Pura construcción de confianza/autoridad; aprovechar que el 88% del alcance ya es gente que no lo sigue |
 | 2 | Reel demo de 20-30 seg: registrar el día → ver el Score subir (contenido de producto real, mismo activo que necesita el listado de tienda) | Mostrar, no explicar — el formato que mejor convierte en 2026 |
 | 3 (semana de lanzamiento en tienda, según calendario de 30 días) | Reel de "ya está disponible" + Story fija con el link | Concentrar el empujón de descargas del día 1 |
 | 4 en adelante | 1 Reel/semana alternando gancho educativo (mismo pilar que el blog) con gancho de producto | Sostener sin quemar la cuenta con venta constante |
@@ -110,7 +110,7 @@ Este plan no reemplaza `plan-lanzamiento-30-dias.md`, lo alimenta específicamen
 | Días (desde 18 jul) | Acción de redes | Cuenta |
 |---|---|---|
 | 1-3 | Actualizar bio + link-in-bio en ambas cuentas (sección 1). Configurar Meta Business Suite para las 2 marcas. | Ambas |
-| 1-7 | Publicar 1-2 Reels "detrás de cámara" (historia de Mario/por qué la app) | `@cortorrealfit` |
+| 1-7 | Publicar 1-2 Reels "detrás de cámara" (el problema real de sus clientes, sin mencionar la app todavía) | `@cortorrealfit` |
 | 4-10 | Seguir publicando en `@biohackerlatino` con la fórmula que ya funciona (dato + gancho), sin esperar a tener más seguidores para empezar | `@biohackerlatino` |
 | 8-10 | Grabar el Reel demo de producto (registrar día → ver Score) — mismo asset que necesita el listado de tienda | `@cortorrealfit`, republicado en `@biohackerlatino` |
 | 11-13 (día de lanzamiento en tienda) | Reel "ya está disponible" + Story fija + etiquetar `@biohackerlatino` en todo | `@cortorrealfit` → empuja a `@biohackerlatino` |
