@@ -42,3 +42,4 @@ Thumbs.db
 
 # Supabase CLI local cache
 supabase/.temp/
+.gstack/
