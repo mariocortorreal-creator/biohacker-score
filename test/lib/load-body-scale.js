@@ -15,6 +15,14 @@ const EXPORT_NAMES = [
   "migrateBodyStageV1ToV2",
   "GOAL_DIRECTION_LABELS",
   "suggestedGoals",
+  "BODY_STAGE_FAT_PCT",
+  "bmrMifflinStJeor",
+  "leanMassKg",
+  "bmrKatchMcArdle",
+  "estimatedMetabolicAge",
+  "ACTIVITY_FACTORS",
+  "tdeeFromBmr",
+  "startingPointDiagnosis",
 ];
 
 function loadBodyScale() {

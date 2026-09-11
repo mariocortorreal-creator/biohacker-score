@@ -615,6 +615,100 @@ function suggestedGoals(goalDirection) {
                 : DEFAULT_GOALS.fastingHours;
     return { sleepHours: DEFAULT_GOALS.sleepHours, fastingHours, exerciseMinutes: DEFAULT_GOALS.exerciseMinutes, stressMax: DEFAULT_GOALS.stressMax };
 }
+// ---------- Starting-point diagnosis: value before the first daily entry ----------
+// Everything the profile already asks for (age, weight, height, sex, composition,
+// activity) is enough to hand the user a diagnosis on day one. Body fat comes from the
+// visual stage they picked, so every figure derived from it is an estimate and the UI
+// must say so; a bioimpedance scale is what turns it into a measurement.
+const BODY_STAGE_FAT_PCT = {
+    //       1 Delgado, 2 Promedio, 3 Sobrepeso, 4 Obesidad, 5 Atlético, 6 Musculoso
+    male:   { 1: 15, 2: 22, 3: 28, 4: 36, 5: 13, 6: 10 },
+    female: { 1: 22, 2: 30, 3: 36, 4: 44, 5: 21, 6: 18 },
+};
+function isPositiveNumber(n) {
+    return typeof n === "number" && Number.isFinite(n) && n > 0;
+}
+function bmrMifflinStJeor(weightKg, heightCm, age, gender) {
+    if (!isPositiveNumber(weightKg) || !isPositiveNumber(heightCm) || !isPositiveNumber(age))
+        return null;
+    if (gender !== "male" && gender !== "female")
+        return null;
+    const base = 10 * weightKg + 6.25 * heightCm - 5 * age;
+    return gender === "male" ? base + 5 : base - 161;
+}
+function leanMassKg(weightKg, fatPct) {
+    if (!isPositiveNumber(weightKg) || typeof fatPct !== "number" || fatPct < 0 || fatPct >= 100)
+        return null;
+    return weightKg * (1 - fatPct / 100);
+}
+function bmrKatchMcArdle(leanKg) {
+    if (!isPositiveNumber(leanKg))
+        return null;
+    return 370 + 21.6 * leanKg;
+}
+const METABOLIC_AGE_MIN = 18;
+const METABOLIC_AGE_MAX = 80;
+const METABOLIC_AGE_MAX_DRIFT = 15;
+// The age at which an average person of this weight and height would have the resting
+// expenditure we estimate from lean mass. Compared against this sex's "Promedio" (stage 2)
+// body fat rather than age zero, since Katch-McArdle and Mifflin-St Jeor don't agree at the
+// extremes — comparing the same body at two different fat percentages cancels that out.
+// Each 5 kcal/day of resting expenditure is worth one year in Mifflin-St Jeor, so the gap
+// converts to years. Drift is capped: the fat % behind it is a visual estimate, and a
+// 20-year swing would be claiming a precision the input doesn't have.
+function estimatedMetabolicAge({ weightKg, heightCm, age, gender, stage }) {
+    const table = BODY_STAGE_FAT_PCT[gender];
+    if (!table || !isPositiveNumber(age) || !isPositiveNumber(weightKg) || !isPositiveNumber(heightCm))
+        return null;
+    const fatPct = table[stage];
+    if (fatPct === undefined)
+        return null;
+    const realBmr = bmrKatchMcArdle(leanMassKg(weightKg, fatPct));
+    // Reference: same body at this sex's "Promedio" (stage 2) body fat. Each 5 kcal/day of
+    // resting expenditure is worth one year in Mifflin-St Jeor, so the gap converts to years.
+    const referenceBmr = bmrKatchMcArdle(leanMassKg(weightKg, table[2]));
+    if (realBmr == null || referenceBmr == null)
+        return null;
+    let solved = age + (referenceBmr - realBmr) / 5;
+    solved = Math.min(age + METABOLIC_AGE_MAX_DRIFT, Math.max(age - METABOLIC_AGE_MAX_DRIFT, solved));
+    solved = Math.min(METABOLIC_AGE_MAX, Math.max(METABOLIC_AGE_MIN, solved));
+    return Math.round(solved);
+}
+const ACTIVITY_FACTORS = { sedentario: 1.2, ligero: 1.375, moderado: 1.55, activo: 1.725, muy_activo: 1.9 };
+function tdeeFromBmr(bmr, activityLevel) {
+    const factor = ACTIVITY_FACTORS[activityLevel];
+    if (!isPositiveNumber(bmr) || !factor)
+        return null;
+    return Math.round(bmr * factor);
+}
+function startingPointDiagnosis(profile) {
+    if (!profile || typeof profile !== "object")
+        return null;
+    const { weightKg, heightCm, age, gender, currentStage, targetStage, activityLevel } = profile;
+    const missing = [];
+    if (!isPositiveNumber(weightKg)) missing.push("weightKg");
+    if (!isPositiveNumber(heightCm)) missing.push("heightCm");
+    if (!isPositiveNumber(age)) missing.push("age");
+    if (gender !== "male" && gender !== "female") missing.push("gender");
+    if (!BODY_STAGE_AXES[currentStage]) missing.push("currentStage");
+    if (!BODY_STAGE_AXES[targetStage]) missing.push("targetStage");
+    if (!ACTIVITY_FACTORS[activityLevel]) missing.push("activityLevel");
+    const empty = { bmr: null, tdee: null, fatPct: null, metabolicAge: null, chronologicalAge: null, direction: null, directionLabel: null, missing };
+    if (missing.length > 0)
+        return empty;
+    const bmr = Math.round(bmrMifflinStJeor(weightKg, heightCm, age, gender));
+    const direction = goalDirectionFromBody(currentStage, targetStage);
+    return {
+        bmr,
+        tdee: tdeeFromBmr(bmr, activityLevel),
+        fatPct: BODY_STAGE_FAT_PCT[gender][currentStage],
+        metabolicAge: estimatedMetabolicAge({ weightKg, heightCm, age, gender, stage: currentStage }),
+        chronologicalAge: age,
+        direction,
+        directionLabel: GOAL_DIRECTION_LABELS[direction] || null,
+        missing: [],
+    };
+}
 const MAINTENANCE_KCAL_PER_KG = 30;
 const FAT_G_PER_KG = 0.8;
 function computeMacros(weightKg, macroRow) {
