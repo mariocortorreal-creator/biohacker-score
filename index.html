@@ -523,6 +523,92 @@ function bestImprovedCategory(entries, goals) {
     }
     return best ? best.key : null;
 }
+// ---------- Daily insight: one different sentence per day, derived from the user's data ----------
+// The score is deterministic, which makes opening the app predictable. This picks, among
+// the insights the data currently supports, one per calendar day — rotating deterministically
+// through the candidates so N consecutive days show all N of them, instead of a hash that could
+// repeat the same one for several days in a row.
+const INSIGHT_KINDS = ["streak", "weekly_delta", "sleep_stress_link", "best_category", "sleep_vs_goal", "first_entry"];
+function scoreEntry(e, goals) {
+    return {
+        sleep: sleepScore(e.sleep_hours, e.sleep_quality, goals.sleepHours),
+        nutrition: nutritionScore(e.fasting_hours, e.nutrition_quality, goals.fastingHours),
+        exercise: exerciseScore(e.exercise_minutes, e.exercise_intensity, goals.exerciseMinutes),
+        stress: stressScore(e.stress_level, goals.stressMax),
+    };
+}
+function dayIndex(todayStr) {
+    const ms = Date.parse(`${todayStr}T00:00:00Z`);
+    return Number.isFinite(ms) ? Math.floor(ms / 86400000) : 0;
+}
+function dailyInsight(entries, goals, todayStr) {
+    if (!Array.isArray(entries) || entries.length === 0)
+        return null;
+    const g = goals || DEFAULT_GOALS;
+    const candidates = [];
+    if (entries.length === 1) {
+        candidates.push({ kind: "first_entry", tone: "neutral", text: "Primer día registrado. Con tres más empiezo a ver tus patrones." });
+    }
+    const streak = computeStreak(entries);
+    if (streak >= 2) {
+        candidates.push({ kind: "streak", tone: "up", text: `${streak} días seguidos registrando. La constancia es el dato que más predice resultados.` });
+    }
+    const weekly = weeklyComparison(entries, g);
+    if (weekly && weekly.lastAvg != null && weekly.deltaPct != null && Math.abs(weekly.deltaPct) >= 3) {
+        const up = weekly.deltaPct > 0;
+        candidates.push({
+            kind: "weekly_delta",
+            tone: up ? "up" : "down",
+            text: up
+                ? `Tu score de esta semana va ${Math.round(weekly.deltaPct)} % por encima de la semana pasada.`
+                : `Tu score de esta semana va ${Math.abs(Math.round(weekly.deltaPct))} % por debajo de la semana pasada. Mira qué cambió.`,
+        });
+    }
+    // Sleep <-> stress link: compare stress on nights with >= 7 h against nights with less.
+    const withStress = entries.filter((e) => e.sleep_hours != null && e.stress_level != null);
+    if (withStress.length >= 6) {
+        const long = withStress.filter((e) => e.sleep_hours >= 7);
+        const short = withStress.filter((e) => e.sleep_hours < 7);
+        if (long.length >= 2 && short.length >= 2) {
+            const avg = (arr) => arr.reduce((a, e) => a + e.stress_level, 0) / arr.length;
+            const diff = avg(short) - avg(long);
+            if (diff >= 1.5) {
+                candidates.push({ kind: "sleep_stress_link", tone: "neutral", text: `Los días que dormiste menos de 7 h tu estrés subió ${diff.toFixed(1)} puntos. Dormir es tu palanca más barata.` });
+            }
+        }
+    }
+    // Best category over the last 7 entries.
+    const recent = [...entries].sort((a, b) => (a.entry_date < b.entry_date ? 1 : -1)).slice(0, 7);
+    if (recent.length >= 3) {
+        const sums = { sleep: [], nutrition: [], exercise: [], stress: [] };
+        recent.forEach((e) => {
+            const s = scoreEntry(e, g);
+            Object.keys(sums).forEach((k) => { if (s[k] != null) sums[k].push(s[k]); });
+        });
+        const avgs = Object.keys(sums).filter((k) => sums[k].length > 0).map((k) => ({ k, v: sums[k].reduce((a, b) => a + b, 0) / sums[k].length }));
+        if (avgs.length >= 2) {
+            avgs.sort((a, b) => b.v - a.v);
+            const labels = { sleep: "el sueño", nutrition: "la nutrición", exercise: "el ejercicio", stress: "el estrés" };
+            candidates.push({ kind: "best_category", tone: "up", text: `Tu punto más fuerte esta semana es ${labels[avgs[0].k]} (${Math.round(avgs[0].v)}). Tu mayor margen está en ${labels[avgs[avgs.length - 1].k]} (${Math.round(avgs[avgs.length - 1].v)}).` });
+        }
+    }
+    // Sleep against goal.
+    const sleeps = recent.filter((e) => e.sleep_hours != null);
+    if (sleeps.length >= 3) {
+        const avgSleep = sleeps.reduce((a, e) => a + e.sleep_hours, 0) / sleeps.length;
+        const gap = g.sleepHours - avgSleep;
+        if (gap >= 0.5) {
+            candidates.push({ kind: "sleep_vs_goal", tone: "down", text: `Duermes ${avgSleep.toFixed(1)} h de media, ${gap.toFixed(1)} h por debajo de tu meta. Acostarte ${Math.round(gap * 60)} minutos antes lo cierra.` });
+        } else if (gap <= -0.5) {
+            candidates.push({ kind: "sleep_vs_goal", tone: "up", text: `Duermes ${avgSleep.toFixed(1)} h de media, por encima de tu meta. Ese margen se nota en el estrés.` });
+        }
+    }
+    if (candidates.length === 0)
+        return null;
+    const n = candidates.length;
+    const idx = ((dayIndex(todayStr || "") % n) + n) % n;
+    return candidates[idx];
+}
 // ---------- Recommendation engine ----------
 function tier(v) {
     if (v == null)
@@ -2886,6 +2972,10 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     const recommendations = useMemo(() => buildRecommendations(todayScores), [todayScores]);
     const weakestKey = recommendations.length > 0 ? recommendations[0].key : null;
     const streak = useMemo(() => computeStreak(entries), [entries]);
+    const insight = useMemo(() => dailyInsight(entries, goals, todayStr), [entries, goals, todayStr]);
+    const insightCard = insight && React.createElement("div", { className: "w-full max-w-md mt-4 bg-[#11161F] border rounded-2xl px-4 py-3 flex items-start gap-3", style: { borderColor: insight.tone === "up" ? "#7FE3A355" : insight.tone === "down" ? "#FFC85755" : "#1E2535" } },
+        React.createElement("span", { className: "font-mono text-lg leading-none mt-0.5", style: { color: insight.tone === "up" ? "#7FE3A3" : insight.tone === "down" ? "#FFC857" : "#3DDCFF" } }, insight.tone === "up" ? "↑" : insight.tone === "down" ? "↓" : "→"),
+        React.createElement("p", { className: "text-sm text-slate-200 leading-relaxed" }, insight.text));
     useEffect(() => {
         // Ask for a store rating at a genuine moment of satisfaction (a 3-day streak), not on
         // first load. The OS-level API (SKStoreReviewController / Android ReviewManager) already
@@ -3261,6 +3351,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                     React.createElement("span", null, "\uD83D\uDD25"),
                     React.createElement("span", { className: "font-mono text-slate-200" }, streak),
                     React.createElement("span", { className: "text-slate-400" }, streak === 1 ? "día seguido" : "días seguidos"))),
+                insightCard,
                 React.createElement(WeeklyShareCard, { total: total, weekly: weekly, streak: streak, topCategoryLabel: shareTopCategoryKey ? CATEGORY_LABELS[shareTopCategoryKey] : null }),
                 React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-4 gap-3 mt-8 w-full max-w-md" }, categories.map((c) => (React.createElement("div", { key: c.key, className: "text-center" },
                     React.createElement("div", { className: "font-mono text-lg", style: { color: scoreColor(c.value) } }, c.value != null ? Math.round(c.value) : "--"),

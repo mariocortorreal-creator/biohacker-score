@@ -23,6 +23,8 @@ const EXPORT_NAMES = [
   "computeStreak",
   "weeklyComparison",
   "DEFAULT_GOALS",
+  "dailyInsight",
+  "INSIGHT_KINDS",
 ];
 
 function loadScoringEngine() {
