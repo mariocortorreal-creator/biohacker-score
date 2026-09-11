@@ -240,6 +240,9 @@ const Activity = (p) => React.createElement(Icon, { ...p },
 const Brain = (p) => React.createElement(Icon, { ...p },
     React.createElement("path", { d: "M9.5 2A2.5 2.5 0 0 0 7 4.5v.55A3.5 3.5 0 0 0 4 8.5 3.5 3.5 0 0 0 5.06 11 3.5 3.5 0 0 0 4 13.5 3.5 3.5 0 0 0 7 17v.5A2.5 2.5 0 0 0 9.5 20h0A2.5 2.5 0 0 0 12 17.5v-13A2.5 2.5 0 0 0 9.5 2z" }),
     React.createElement("path", { d: "M14.5 2A2.5 2.5 0 0 1 17 4.5v.55A3.5 3.5 0 0 1 20 8.5 3.5 3.5 0 0 1 18.94 11 3.5 3.5 0 0 1 20 13.5 3.5 3.5 0 0 1 17 17v.5a2.5 2.5 0 0 1-2.5 2.5h0A2.5 2.5 0 0 1 12 17.5v-13A2.5 2.5 0 0 1 14.5 2z" }));
+const UserSilhouette = (p) => React.createElement(Icon, { ...p },
+    React.createElement("path", { d: "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" }),
+    React.createElement("circle", { cx: "12", cy: "7", r: "4" }));
 const LogOut = (p) => React.createElement(Icon, { ...p },
     React.createElement("path", { d: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" }),
     React.createElement("polyline", { points: "16 17 21 12 16 7" }),
@@ -271,19 +274,118 @@ const Share2 = (p) => React.createElement(Icon, { ...p },
 // ---------- Scoring engine ----------
 function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
 const DEFAULT_GOALS = { sleepHours: 8, fastingHours: 16, exerciseMinutes: 45, stressMax: 3 };
+// ---------- Metric capture: turn what the user knows into what the score needs ----------
+// A user knows the time they went to bed; they do not know they slept 7.5 hours. These
+// helpers take clock times and plain-language answers and produce the same numbers the
+// scoring functions above already consume, so the stored columns never change shape.
+function clockToMinutes(hhmm) {
+    if (typeof hhmm !== "string")
+        return null;
+    const parts = /^([0-9]{2}):([0-9]{2})$/.exec(hhmm);
+    if (!parts)
+        return null;
+    const hours = parseInt(parts[1], 10);
+    const minutes = parseInt(parts[2], 10);
+    if (hours > 23 || minutes > 59)
+        return null;
+    return hours * 60 + minutes;
+}
+// Postgres `time` comes back as "07:00:00"; <input type="time"> only accepts "07:00".
+function clockFromDb(value) {
+    if (typeof value !== "string" || value === "")
+        return "";
+    return value.slice(0, 5);
+}
+function hoursBetweenClock(start, end) {
+    const from = clockToMinutes(start);
+    const to = clockToMinutes(end);
+    if (from == null || to == null)
+        return null;
+    let minutes = to - from;
+    // A negative span means the clock crossed midnight, not that time ran backwards.
+    if (minutes < 0)
+        minutes += 24 * 60;
+    return Math.round((minutes / 60) * 100) / 100;
+}
+const MIN_PLAUSIBLE_SLEEP_HOURS = 2;
+const MAX_PLAUSIBLE_SLEEP_HOURS = 14;
+function sleepHoursFromClock(bedtime, waketime) {
+    const hours = hoursBetweenClock(bedtime, waketime);
+    if (hours == null)
+        return null;
+    // Outside this window the entry is a swapped AM/PM, not a real night. Returning null
+    // keeps a 20-hour "night" from scoring as anything at all.
+    if (hours < MIN_PLAUSIBLE_SLEEP_HOURS || hours > MAX_PLAUSIBLE_SLEEP_HOURS)
+        return null;
+    return hours;
+}
+function fastingHoursFromClock(lastMealYesterday, firstMealToday) {
+    return hoursBetweenClock(lastMealYesterday, firstMealToday);
+}
+const NUTRITION_CHECKLIST = [
+    { key: "protein", label: "Proteína en cada comida", good: true },
+    { key: "vegetables", label: "Verduras o vegetales", good: true },
+    { key: "ultraprocessed", label: "Ultraprocesados o comida rápida", good: false },
+    { key: "sugaryDrinks", label: "Bebidas azucaradas", good: false },
+    { key: "alcohol", label: "Alcohol", good: false },
+];
+const NUTRITION_CHECK_PENALTY = 2;
+function nutritionQualityFromChecklist(checks) {
+    if (!checks || typeof checks !== "object")
+        return null;
+    let score = 10;
+    NUTRITION_CHECKLIST.forEach((item) => {
+        const ticked = checks[item.key] === true;
+        const missed = item.good ? !ticked : ticked;
+        if (missed)
+            score -= NUTRITION_CHECK_PENALTY;
+    });
+    return clamp(score, 1, 10);
+}
+// Plain-language answers instead of an abstract 1-10 slider the user has to invent.
+// Intensity wording follows the talk test (perceived exertion), not a number nobody calibrates.
+const SLEEP_QUALITY_OPTIONS = [
+    { value: 2, label: "Mal: desperté varias veces" },
+    { value: 5, label: "Regular: me costó dormirme" },
+    { value: 8, label: "Bien: dormí casi de corrido" },
+    { value: 10, label: "Excelente: dormí de un tirón" },
+];
+const EXERCISE_INTENSITY_OPTIONS = [
+    { value: 2, label: "Suave: podía conversar sin esfuerzo" },
+    { value: 5, label: "Moderado: hablaba en frases cortas" },
+    { value: 8, label: "Fuerte: me costaba hablar" },
+    { value: 10, label: "Máximo: no podía hablar" },
+];
+const STRESS_LEVEL_OPTIONS = [
+    { value: 2, label: "Tranquilo" },
+    { value: 5, label: "Algo tenso" },
+    { value: 8, label: "Muy estresado" },
+    { value: 10, label: "Desbordado" },
+];
 // ---------- Body composition image set ----------
-const BODY_IMAGES = {
+// Six stages, ordered so the first four walk up body fat (where most people are) and the
+// last two add muscle at a lean body fat. The old four-image set spanned roughly 10-30%
+// body fat only — nobody lean and nobody obese could find themselves in it, and its two
+// leanest pictures were the same physique twice. See BODY_STAGE_AXES for how a stage
+// turns into a nutrition direction.
+// `img: null` = still to be produced; the selector renders the label alone until then.
+const CLOUDINARY_BODY = "https://res.cloudinary.com/db9jsvtr3/image/upload";
+const BODY_STAGES = {
     male: [
-        { stage: 1, label: "Definido", img: "https://res.cloudinary.com/db9jsvtr3/image/upload/v1782859013/biohacker-score/biohacker-score/male-1-lean.jpg" },
-        { stage: 2, label: "Atlético", img: "https://res.cloudinary.com/db9jsvtr3/image/upload/v1782859018/biohacker-score/male-2-fit.jpg" },
-        { stage: 3, label: "Promedio", img: "https://res.cloudinary.com/db9jsvtr3/image/upload/v1782859022/biohacker-score/male-3-average.jpg" },
-        { stage: 4, label: "Sobre el promedio", img: "https://res.cloudinary.com/db9jsvtr3/image/upload/v1782859027/biohacker-score/male-4-higher.jpg" },
+        { stage: 1, label: "Delgado", hint: "Poco peso, sin músculo marcado", img: `${CLOUDINARY_BODY}/v1789061841/biohacker-score/male-1-delgado.jpg` },
+        { stage: 2, label: "Promedio", hint: "Sin definición, barriga blanda", img: `${CLOUDINARY_BODY}/v1782859022/biohacker-score/male-3-average.jpg` },
+        { stage: 3, label: "Sobrepeso", hint: "Barriga marcada, cintura ancha", img: `${CLOUDINARY_BODY}/v1782859027/biohacker-score/male-4-higher.jpg` },
+        { stage: 4, label: "Obesidad", hint: "Peso alto en abdomen y pecho", img: `${CLOUDINARY_BODY}/v1789061842/biohacker-score/male-4-obesidad.jpg` },
+        { stage: 5, label: "Atlético", hint: "Algo de definición, cintura plana", img: `${CLOUDINARY_BODY}/v1782859018/biohacker-score/male-2-fit.jpg` },
+        { stage: 6, label: "Musculoso", hint: "Músculo visible y volumen", img: `${CLOUDINARY_BODY}/v1789061843/biohacker-score/male-6-musculoso.jpg` },
     ],
     female: [
-        { stage: 1, label: "Definida", img: "https://res.cloudinary.com/db9jsvtr3/image/upload/v1782859031/biohacker-score/female-1-lean.jpg" },
-        { stage: 2, label: "Atlética", img: "https://res.cloudinary.com/db9jsvtr3/image/upload/v1782859034/biohacker-score/female-2-fit.jpg" },
-        { stage: 3, label: "Promedio", img: "https://res.cloudinary.com/db9jsvtr3/image/upload/v1782859040/biohacker-score/female-3-average.jpg" },
-        { stage: 4, label: "Sobre el promedio", img: "https://res.cloudinary.com/db9jsvtr3/image/upload/v1782859044/biohacker-score/female-4-higher.jpg" },
+        { stage: 1, label: "Delgada", hint: "Poco peso, sin tono muscular", img: `${CLOUDINARY_BODY}/v1789061844/biohacker-score/female-1-delgada.jpg` },
+        { stage: 2, label: "Promedio", hint: "Sin definición, curvas naturales", img: `${CLOUDINARY_BODY}/v1782859040/biohacker-score/female-3-average.jpg` },
+        { stage: 3, label: "Sobrepeso", hint: "Cintura y caderas más llenas", img: `${CLOUDINARY_BODY}/v1782859044/biohacker-score/female-4-higher.jpg` },
+        { stage: 4, label: "Obesidad", hint: "Peso alto en abdomen y caderas", img: `${CLOUDINARY_BODY}/v1789061845/biohacker-score/female-4-obesidad.jpg` },
+        { stage: 5, label: "Atlética", hint: "Cintura plana, tono visible", img: `${CLOUDINARY_BODY}/v1782859034/biohacker-score/female-2-fit.jpg` },
+        { stage: 6, label: "Tonificada", hint: "Músculo definido, hombros marcados", img: `${CLOUDINARY_BODY}/v1789061846/biohacker-score/female-6-tonificada.jpg` },
     ],
 };
 function sleepScore(hours, quality, goalHours) {
@@ -462,18 +564,55 @@ function buildRecommendations(scores) {
     return entries.map((e) => ({ key: e.key, label: CATEGORY_LABELS[e.key], value: e.value, ...RECS[e.key][e.t] }));
 }
 // ---------- Body composition -> nutrition direction ----------
+// The six stages are two axes, not one ladder: stages 1-4 walk up body fat (where most
+// people live) and 5-6 add muscle at a lean body fat. Comparing raw stage numbers the way
+// the old four-image scale did would read "average -> athletic" as gaining weight.
+// Fat: 1 very lean .. 5 obese. Muscle: 1 untrained .. 4 well-built.
+const BODY_STAGE_AXES = {
+    1: { fat: 2, muscle: 1 }, // Delgado — low fat, no muscle to speak of
+    2: { fat: 3, muscle: 2 }, // Promedio — no definition at rest
+    3: { fat: 4, muscle: 2 }, // Sobrepeso
+    4: { fat: 5, muscle: 2 }, // Obesidad
+    5: { fat: 2, muscle: 3 }, // Atlético — visible definition
+    6: { fat: 2, muscle: 4 }, // Musculoso — clear mass
+};
+const BODY_SCALE_VERSION = 2;
+// Old scale (version 1) was 1 Definido, 2 Atlético, 3 Promedio, 4 Sobre el promedio — a
+// span of roughly 10-30% body fat. Nothing in it depicted obesity, so nothing maps there.
+const BODY_STAGE_V1_TO_V2 = { 1: 5, 2: 5, 3: 2, 4: 3 };
+function migrateBodyStageV1ToV2(oldStage) {
+    const mapped = BODY_STAGE_V1_TO_V2[oldStage];
+    return mapped === undefined ? null : mapped;
+}
 function goalDirectionFromBody(current, target) {
     if (!current || !target)
         return null;
-    if (target < current)
+    const from = BODY_STAGE_AXES[current];
+    const to = BODY_STAGE_AXES[target];
+    if (!from || !to)
+        return null;
+    const losingFat = to.fat < from.fat;
+    const gainingMuscle = to.muscle > from.muscle;
+    if (losingFat && gainingMuscle)
+        return "recomp";
+    if (losingFat)
         return "cut";
-    if (target > current)
+    if (gainingMuscle)
         return "bulk";
     return "maintain";
 }
-const GOAL_DIRECTION_LABELS = { cut: "Pérdida de grasa", bulk: "Ganancia muscular", maintain: "Mantenimiento" };
+const GOAL_DIRECTION_LABELS = {
+    cut: "Pérdida de grasa",
+    bulk: "Ganancia muscular",
+    recomp: "Perder grasa y ganar músculo",
+    maintain: "Mantenimiento",
+};
 function suggestedGoals(goalDirection) {
-    const fastingHours = goalDirection === "cut" ? 18 : goalDirection === "bulk" ? 14 : DEFAULT_GOALS.fastingHours;
+    // Recomp sits between the two: a mild fasting window, not the aggressive one a pure cut gets.
+    const fastingHours = goalDirection === "cut" ? 18
+        : goalDirection === "recomp" ? 16
+            : goalDirection === "bulk" ? 14
+                : DEFAULT_GOALS.fastingHours;
     return { sleepHours: DEFAULT_GOALS.sleepHours, fastingHours, exerciseMinutes: DEFAULT_GOALS.exerciseMinutes, stressMax: DEFAULT_GOALS.stressMax };
 }
 const MAINTENANCE_KCAL_PER_KG = 30;
@@ -710,6 +849,84 @@ function FieldSlider({ icon: IconCmp, label, unit, value, onChange, min, max, st
                 " ",
                 React.createElement("span", { className: "text-slate-400" }, unit))),
         React.createElement("input", { type: "range", min: min, max: max, step: step, value: value !== null && value !== void 0 ? value : min, onChange: (e) => onChange(parseFloat(e.target.value)), "aria-label": label, className: "w-full", style: { accentColor: color, color } })));
+}
+// ---------- Daily entry fields: ask for what the user knows ----------
+// A slider asks "how many hours did you sleep?" — a question nobody can answer without
+// doing arithmetic on two times they do remember. These fields ask for the times instead
+// and derive the number, or replace an abstract 1-10 rating with words.
+function ClockPairField({ icon: IconCmp, label, color, startLabel, endLabel, startValue, endValue, onStartChange, onEndChange, derived, derivedUnit, hint }) {
+    const inputClass = "w-full mt-1 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF] transition-colors";
+    return (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
+        React.createElement("div", { className: "flex items-center justify-between mb-3" },
+            React.createElement("div", { className: "flex items-center gap-2" },
+                React.createElement(IconCmp, { size: 16, style: { color } }),
+                React.createElement("span", { className: "text-sm text-slate-300" }, label)),
+            React.createElement("span", { className: "font-mono text-sm", style: { color: derived != null ? color : "#64748B" } }, derived != null ? `${derived} ${derivedUnit}` : "--")),
+        React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+            React.createElement("label", { className: "text-xs text-slate-400" },
+                startLabel,
+                React.createElement("input", { type: "time", value: startValue || "", onChange: (e) => onStartChange(e.target.value), className: inputClass })),
+            React.createElement("label", { className: "text-xs text-slate-400" },
+                endLabel,
+                React.createElement("input", { type: "time", value: endValue || "", onChange: (e) => onEndChange(e.target.value), className: inputClass }))),
+        hint && derived == null && React.createElement("div", { className: "text-[11px] text-slate-500 mt-2" }, hint)));
+}
+function ChoiceField({ icon: IconCmp, label, color, options, value, onChange }) {
+    return (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
+        React.createElement("div", { className: "flex items-center gap-2 mb-3" },
+            React.createElement(IconCmp, { size: 16, style: { color } }),
+            React.createElement("span", { className: "text-sm text-slate-300" }, label)),
+        React.createElement("div", { className: "grid gap-2" }, options.map((opt) => {
+            const selected = value === opt.value;
+            return React.createElement("button", {
+                key: opt.value,
+                type: "button",
+                onClick: () => onChange(opt.value),
+                className: `text-left text-xs rounded-lg px-3 py-2 border transition ${selected ? "" : "border-[#1E2535] text-slate-400 hover:text-slate-200"}`,
+                style: selected ? { borderColor: color, color, backgroundColor: `${color}1A` } : {},
+            }, opt.label);
+        }))));
+}
+const EXERCISE_MINUTE_PRESETS = [0, 15, 30, 45, 60, 90];
+function MinutesField({ icon: IconCmp, label, color, value, onChange }) {
+    return (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
+        React.createElement("div", { className: "flex items-center justify-between mb-3" },
+            React.createElement("div", { className: "flex items-center gap-2" },
+                React.createElement(IconCmp, { size: 16, style: { color } }),
+                React.createElement("span", { className: "text-sm text-slate-300" }, label)),
+            React.createElement("span", { className: "font-mono text-sm text-slate-100" }, value !== null && value !== void 0 ? value : "--",
+                " ",
+                React.createElement("span", { className: "text-slate-400" }, "min"))),
+        React.createElement("div", { className: "flex flex-wrap gap-2" }, EXERCISE_MINUTE_PRESETS.map((preset) => {
+            const selected = value === preset;
+            return React.createElement("button", {
+                key: preset,
+                type: "button",
+                onClick: () => onChange(preset),
+                className: `text-xs rounded-lg px-3 py-1.5 border transition ${selected ? "" : "border-[#1E2535] text-slate-400 hover:text-slate-200"}`,
+                style: selected ? { borderColor: color, color, backgroundColor: `${color}1A` } : {},
+            }, preset === 0 ? "Nada" : `${preset}`);
+        })),
+        React.createElement("input", { type: "number", min: 0, max: 300, step: 5, value: value !== null && value !== void 0 ? value : 0, onChange: (e) => onChange(Math.min(300, Math.max(0, parseInt(e.target.value, 10) || 0))), "aria-label": `${label} (minutos exactos)`, className: "w-full mt-3 bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF] transition-colors" })));
+}
+function ChecklistField({ icon: IconCmp, label, color, items, checks, onToggle, derived }) {
+    return (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
+        React.createElement("div", { className: "flex items-center justify-between mb-3" },
+            React.createElement("div", { className: "flex items-center gap-2" },
+                React.createElement(IconCmp, { size: 16, style: { color } }),
+                React.createElement("span", { className: "text-sm text-slate-300" }, label)),
+            React.createElement("span", { className: "font-mono text-sm text-slate-100" }, derived != null ? `${derived}/10` : "--")),
+        React.createElement("div", { className: "grid gap-2" }, items.map((item) => {
+            const ticked = checks[item.key] === true;
+            const accent = item.good ? "#7FE3A3" : "#FF6B5E";
+            return React.createElement("button", {
+                key: item.key,
+                type: "button",
+                onClick: () => onToggle(item.key),
+                className: `flex items-center gap-2 text-left text-xs rounded-lg px-3 py-2 border transition ${ticked ? "" : "border-[#1E2535] text-slate-400 hover:text-slate-200"}`,
+                style: ticked ? { borderColor: accent, color: accent, backgroundColor: `${accent}1A` } : {},
+            }, React.createElement("span", { className: "font-mono text-[10px] w-4 shrink-0" }, ticked ? "✓" : "○"), item.label);
+        }))));
 }
 function SuggestedGoalChip({ value, unit, onApply }) {
     return (React.createElement("button", { type: "button", onClick: onApply, className: "font-mono text-[10px] text-[#3DDCFF] bg-[#3DDCFF]/10 border border-[#3DDCFF]/30 rounded-full px-2 py-0.5 hover:bg-[#3DDCFF]/20 transition shrink-0" },
@@ -1201,36 +1418,63 @@ function ResetPasswordScreen({ accessToken, refreshToken, user, onDone }) {
                     error)),
                 React.createElement("button", { type: "button", onClick: submit, disabled: loading, className: "w-full flex items-center justify-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg py-2.5 hover:brightness-110 transition disabled:opacity-50" }, loading ? React.createElement(Loader2, { size: 16, className: "animate-spin" }) : "Guardar nueva contraseña")))));
 }
+function bodyStage(gender, stage) {
+    const list = BODY_STAGES[gender] || BODY_STAGES.male;
+    return list.find((item) => item.stage === stage) || null;
+}
+function BodyStageThumb({ item, className }) {
+    // A stage whose photo hasn't been produced yet still has to be pickable, so it falls
+    // back to its label rather than rendering a broken image.
+    if (item.img)
+        return React.createElement("img", { src: item.img, alt: item.label, className });
+    // The caption underneath already names the stage, so this stays a silent placeholder
+    // rather than repeating the label twice in the same tile.
+    return React.createElement("div", { className: `${className} flex items-center justify-center bg-[#0B0F16] border border-dashed border-[#1E2535]` },
+        React.createElement(UserSilhouette, { size: 28, className: "text-[#242C3D]" }));
+}
 function BodyImageButton({ item, selected, onClick, accent }) {
-    return (React.createElement("button", { onClick: onClick, type: "button", className: `relative rounded-2xl overflow-hidden border-2 transition ${selected ? "" : "border-[#1E2535] opacity-70 hover:opacity-100"}`, style: selected ? { borderColor: accent, boxShadow: `0 0 0 1px ${accent}` } : {} },
-        React.createElement("img", { src: item.img, alt: item.label, className: "w-full h-36 object-cover object-top bg-[#11161F]" }),
-        React.createElement("div", { className: "absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5" },
-            React.createElement("span", { className: "text-[10px] text-slate-100 font-medium" }, item.label)),
-        selected && (React.createElement("div", { className: "absolute top-1.5 right-1.5 rounded-full p-0.5", style: { backgroundColor: accent } },
-            React.createElement(Check, { size: 11, className: "text-[#06121A]" })))));
+    const thumb = React.createElement(BodyStageThumb, { item: item, className: "w-full h-36 object-cover object-top bg-[#11161F]" });
+    // Solid-enough backing: these photos are shot on a light grey backdrop, so a soft
+    // gradient leaves the caption unreadable exactly where the body ends.
+    const caption = React.createElement("div", { className: "absolute bottom-0 inset-x-0 px-2 py-1.5", style: { background: "linear-gradient(to top, rgba(6,8,9,0.96) 0%, rgba(6,8,9,0.88) 55%, rgba(6,8,9,0) 100%)" } },
+        React.createElement("div", { className: "text-[11px] text-slate-100 font-semibold leading-tight" }, item.label),
+        item.hint && React.createElement("div", { className: "text-[9px] text-slate-300 leading-tight mt-0.5" }, item.hint));
+    const checkMark = selected
+        ? React.createElement("div", { className: "absolute top-1.5 right-1.5 rounded-full p-0.5", style: { backgroundColor: accent } },
+            React.createElement(Check, { size: 11, className: "text-[#06121A]" }))
+        : null;
+    return React.createElement("button", {
+        onClick: onClick,
+        type: "button",
+        "aria-pressed": selected,
+        className: `relative rounded-2xl overflow-hidden border-2 transition ${selected ? "" : "border-[#1E2535] opacity-70 hover:opacity-100"}`,
+        style: selected ? { borderColor: accent, boxShadow: `0 0 0 1px ${accent}` } : {},
+    }, thumb, caption, checkMark);
 }
 function BodySelector({ draft, setDraft, onSave, saving, savedGender, savedCurrent, savedTarget, editing, setEditing }) {
-    const list = BODY_IMAGES[draft.gender];
+    const list = BODY_STAGES[draft.gender] || BODY_STAGES.male;
+    const savedCurrentStage = savedGender ? bodyStage(savedGender, savedCurrent) : null;
+    const savedTargetStage = savedGender ? bodyStage(savedGender, savedTarget) : null;
     return (React.createElement("section", null,
         React.createElement("div", { className: "flex items-center justify-between mb-4" },
             React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400" }, "Tu composici\u00F3n corporal"),
             !editing && savedGender && (React.createElement("button", { onClick: () => setEditing(true), className: "text-xs text-[#3DDCFF] hover:brightness-110 transition" }, "Editar"))),
-        !editing && savedGender ? (React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+        !editing && savedGender && savedCurrentStage && savedTargetStage ? (React.createElement("div", { className: "grid grid-cols-2 gap-3" },
             React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-3 text-center" },
-                React.createElement("img", { src: BODY_IMAGES[savedGender][savedCurrent - 1].img, className: "w-full h-32 object-cover object-top rounded-xl mb-2" }),
+                React.createElement(BodyStageThumb, { item: savedCurrentStage, className: "w-full h-32 object-cover object-top rounded-xl mb-2" }),
                 React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-400" }, "Actual"),
-                React.createElement("div", { className: "text-xs text-slate-200" }, BODY_IMAGES[savedGender][savedCurrent - 1].label)),
+                React.createElement("div", { className: "text-xs text-slate-200" }, savedCurrentStage.label)),
             React.createElement("div", { className: "bg-[#11161F] border border-[#3DDCFF]/30 rounded-2xl p-3 text-center" },
-                React.createElement("img", { src: BODY_IMAGES[savedGender][savedTarget - 1].img, className: "w-full h-32 object-cover object-top rounded-xl mb-2" }),
+                React.createElement(BodyStageThumb, { item: savedTargetStage, className: "w-full h-32 object-cover object-top rounded-xl mb-2" }),
                 React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-[#3DDCFF]" }, "Objetivo"),
-                React.createElement("div", { className: "text-xs text-slate-200" }, BODY_IMAGES[savedGender][savedTarget - 1].label)))) : (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 space-y-5" },
+                React.createElement("div", { className: "text-xs text-slate-200" }, savedTargetStage.label)))) : (React.createElement("div", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4 space-y-5" },
             React.createElement("div", { className: "flex gap-2" }, ["male", "female"].map((g) => (React.createElement("button", { key: g, onClick: () => setDraft({ ...draft, gender: g }), className: `text-xs px-4 py-2 rounded-lg border transition ${draft.gender === g ? "border-[#3DDCFF] text-[#3DDCFF] bg-[#3DDCFF]/10" : "border-[#1E2535] text-slate-400"}` }, g === "male" ? "Masculino" : "Femenino")))),
             React.createElement("div", null,
                 React.createElement("div", { className: "text-xs text-slate-400 mb-2" }, "\u00BFCu\u00E1l se parece m\u00E1s a tu composici\u00F3n actual?"),
-                React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-4 gap-2" }, list.map((item) => (React.createElement(BodyImageButton, { key: item.stage, item: item, accent: "#3DDCFF", selected: draft.current === item.stage, onClick: () => setDraft({ ...draft, current: item.stage }) }))))),
+                React.createElement("div", { className: "grid grid-cols-3 gap-2" }, list.map((item) => (React.createElement(BodyImageButton, { key: item.stage, item: item, accent: "#3DDCFF", selected: draft.current === item.stage, onClick: () => setDraft({ ...draft, current: item.stage }) }))))),
             React.createElement("div", null,
                 React.createElement("div", { className: "text-xs text-slate-400 mb-2" }, "\u00BFA cu\u00E1l quieres llegar?"),
-                React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-4 gap-2" }, list.map((item) => (React.createElement(BodyImageButton, { key: item.stage, item: item, accent: "#7FE3A3", selected: draft.target === item.stage, onClick: () => setDraft({ ...draft, target: item.stage }) }))))),
+                React.createElement("div", { className: "grid grid-cols-3 gap-2" }, list.map((item) => (React.createElement(BodyImageButton, { key: item.stage, item: item, accent: "#7FE3A3", selected: draft.target === item.stage, onClick: () => setDraft({ ...draft, target: item.stage }) }))))),
             React.createElement("button", { onClick: onSave, disabled: saving || !draft.current || !draft.target, className: "flex items-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-5 py-2 hover:brightness-110 transition disabled:opacity-40" },
                 saving ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : React.createElement(Check, { size: 14 }),
                 "Guardar composici\u00F3n")))));
@@ -1565,13 +1809,35 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     const [bodyWeightKg, setBodyWeightKg] = useState(null);
     const [weightDraft, setWeightDraft] = useState(null);
     const [savingWeight, setSavingWeight] = useState(false);
-    const [sleepHours, setSleepHours] = useState(7.5);
-    const [sleepQuality, setSleepQuality] = useState(7);
-    const [fastingHours, setFastingHours] = useState(14);
-    const [nutritionQuality, setNutritionQuality] = useState(7);
-    const [exerciseMinutes, setExerciseMinutes] = useState(30);
-    const [exerciseIntensity, setExerciseIntensity] = useState(6);
-    const [stressLevel, setStressLevel] = useState(4);
+    // Clock times are what the user actually knows; sleepHours/fastingHours below are
+    // derived from them. The plain hour states stay because an entry saved before this
+    // change has the number but not the times — we keep it rather than wipe their day.
+    const [bedtime, setBedtime] = useState("");
+    const [waketime, setWaketime] = useState("");
+    const [lastMealTime, setLastMealTime] = useState("");
+    const [firstMealTime, setFirstMealTime] = useState("");
+    // null means "the user hasn't touched the checklist", which is different from an
+    // all-unticked day: the first must not score at all, the second scores as neutral.
+    const [nutritionChecks, setNutritionChecks] = useState(null);
+    const [storedSleepHours, setStoredSleepHours] = useState(null);
+    const [sleepQuality, setSleepQuality] = useState(null);
+    const [storedFastingHours, setStoredFastingHours] = useState(null);
+    const [storedNutritionQuality, setStoredNutritionQuality] = useState(null);
+    const [exerciseMinutes, setExerciseMinutes] = useState(null);
+    const [exerciseIntensity, setExerciseIntensity] = useState(null);
+    const [stressLevel, setStressLevel] = useState(null);
+    // Derived from the clock fields, falling back to whatever an older entry already stored.
+    const derivedSleepHours = sleepHoursFromClock(bedtime, waketime);
+    const sleepHours = derivedSleepHours != null ? derivedSleepHours : storedSleepHours;
+    const derivedFastingHours = fastingHoursFromClock(lastMealTime, firstMealTime);
+    const fastingHours = derivedFastingHours != null ? derivedFastingHours : storedFastingHours;
+    const nutritionQuality = nutritionChecks ? nutritionQualityFromChecklist(nutritionChecks) : storedNutritionQuality;
+    function toggleNutritionCheck(key) {
+        setNutritionChecks((prev) => {
+            const base = prev || {};
+            return { ...base, [key]: base[key] !== true };
+        });
+    }
     const [isPremium, setIsPremium] = useState(false);
     const [premiumSource, setPremiumSource] = useState(null);
     const [trialEndsAt, setTrialEndsAt] = useState(null);
@@ -2416,13 +2682,20 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                 setEntries(data);
                 const todayEntry = data.find((e) => e.entry_date === todayStr);
                 if (todayEntry) {
-                    setSleepHours((_a = todayEntry.sleep_hours) !== null && _a !== void 0 ? _a : 7.5);
-                    setSleepQuality((_b = todayEntry.sleep_quality) !== null && _b !== void 0 ? _b : 7);
-                    setFastingHours((_c = todayEntry.fasting_hours) !== null && _c !== void 0 ? _c : 14);
-                    setNutritionQuality((_d = todayEntry.nutrition_quality) !== null && _d !== void 0 ? _d : 7);
-                    setExerciseMinutes((_e = todayEntry.exercise_minutes) !== null && _e !== void 0 ? _e : 30);
-                    setExerciseIntensity((_f = todayEntry.exercise_intensity) !== null && _f !== void 0 ? _f : 6);
-                    setStressLevel((_g = todayEntry.stress_level) !== null && _g !== void 0 ? _g : 4);
+                    // Nothing is defaulted to a plausible-looking number any more: an
+                    // untouched field must read as "not logged", not as an average night.
+                    setStoredSleepHours((_a = todayEntry.sleep_hours) !== null && _a !== void 0 ? _a : null);
+                    setSleepQuality((_b = todayEntry.sleep_quality) !== null && _b !== void 0 ? _b : null);
+                    setStoredFastingHours((_c = todayEntry.fasting_hours) !== null && _c !== void 0 ? _c : null);
+                    setStoredNutritionQuality((_d = todayEntry.nutrition_quality) !== null && _d !== void 0 ? _d : null);
+                    setExerciseMinutes((_e = todayEntry.exercise_minutes) !== null && _e !== void 0 ? _e : null);
+                    setExerciseIntensity((_f = todayEntry.exercise_intensity) !== null && _f !== void 0 ? _f : null);
+                    setStressLevel((_g = todayEntry.stress_level) !== null && _g !== void 0 ? _g : null);
+                    setBedtime(clockFromDb(todayEntry.sleep_bedtime));
+                    setWaketime(clockFromDb(todayEntry.sleep_waketime));
+                    setLastMealTime(clockFromDb(todayEntry.fast_last_meal));
+                    setFirstMealTime(clockFromDb(todayEntry.fast_first_meal));
+                    setNutritionChecks(todayEntry.nutrition_checks || null);
                 }
             }
         }
@@ -2444,6 +2717,11 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                 fasting_hours: fastingHours, nutrition_quality: nutritionQuality,
                 exercise_minutes: exerciseMinutes, exercise_intensity: exerciseIntensity,
                 stress_level: stressLevel,
+                // The raw answers, kept so the form can be reopened as the user filled it
+                // and so the derived numbers above stay auditable.
+                sleep_bedtime: bedtime || null, sleep_waketime: waketime || null,
+                fast_last_meal: lastMealTime || null, fast_first_meal: firstMealTime || null,
+                nutrition_checks: nutritionChecks,
             };
             const res = await fetch(`${REST}/daily_entries?on_conflict=user_id,entry_date`, {
                 method: "POST",
@@ -2884,13 +3162,27 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                         "Traer minutos de ejercicio de Salud"),
                     healthSyncMessage && React.createElement("div", { className: "text-[11px] text-slate-400 mt-2" }, healthSyncMessage)),
                 React.createElement("div", { className: "grid sm:grid-cols-2 gap-3" },
-                    React.createElement(FieldSlider, { icon: Moon, label: "Horas de sue\u00F1o", unit: "h", value: sleepHours, onChange: setSleepHours, min: 0, max: 12, step: 0.5, color: "#3DDCFF" }),
-                    React.createElement(FieldSlider, { icon: Moon, label: "Calidad de sue\u00F1o", unit: "/10", value: sleepQuality, onChange: setSleepQuality, min: 1, max: 10, step: 1, color: "#3DDCFF" }),
-                    React.createElement(FieldSlider, { icon: Flame, label: "Horas de ayuno", unit: "h", value: fastingHours, onChange: setFastingHours, min: 0, max: 24, step: 0.5, color: "#7FE3A3" }),
-                    React.createElement(FieldSlider, { icon: Flame, label: "Calidad nutricional", unit: "/10", value: nutritionQuality, onChange: setNutritionQuality, min: 1, max: 10, step: 1, color: "#7FE3A3" }),
-                    React.createElement(FieldSlider, { icon: Activity, label: "Minutos de ejercicio", unit: "min", value: exerciseMinutes, onChange: setExerciseMinutes, min: 0, max: 120, step: 5, color: "#FFC857" }),
-                    React.createElement(FieldSlider, { icon: Activity, label: "Intensidad", unit: "/10", value: exerciseIntensity, onChange: setExerciseIntensity, min: 1, max: 10, step: 1, color: "#FFC857" }),
-                    React.createElement(FieldSlider, { icon: Brain, label: "Nivel de estr\u00E9s", unit: "/10", value: stressLevel, onChange: setStressLevel, min: 1, max: 10, step: 1, color: "#C792FF" })),
+                    React.createElement(ClockPairField, {
+                        icon: Moon, label: "Sue\u00F1o", color: "#3DDCFF",
+                        startLabel: "Me acost\u00E9 a las", endLabel: "Me levant\u00E9 a las",
+                        startValue: bedtime, endValue: waketime,
+                        onStartChange: setBedtime, onEndChange: setWaketime,
+                        derived: sleepHours, derivedUnit: "h",
+                        hint: "Pon las dos horas y calculo lo que dormiste.",
+                    }),
+                    React.createElement(ChoiceField, { icon: Moon, label: "\u00BFC\u00F3mo dormiste?", color: "#3DDCFF", options: SLEEP_QUALITY_OPTIONS, value: sleepQuality, onChange: setSleepQuality }),
+                    React.createElement(ClockPairField, {
+                        icon: Flame, label: "Ayuno", color: "#7FE3A3",
+                        startLabel: "\u00DAltima comida de ayer", endLabel: "Primera comida de hoy",
+                        startValue: lastMealTime, endValue: firstMealTime,
+                        onStartChange: setLastMealTime, onEndChange: setFirstMealTime,
+                        derived: fastingHours, derivedUnit: "h",
+                        hint: "Con las dos horas calculo tu ventana de ayuno.",
+                    }),
+                    React.createElement(ChecklistField, { icon: Flame, label: "\u00BFQu\u00E9 comiste hoy?", color: "#7FE3A3", items: NUTRITION_CHECKLIST, checks: nutritionChecks || {}, onToggle: toggleNutritionCheck, derived: nutritionQuality }),
+                    React.createElement(MinutesField, { icon: Activity, label: "Ejercicio", color: "#FFC857", value: exerciseMinutes, onChange: setExerciseMinutes }),
+                    React.createElement(ChoiceField, { icon: Activity, label: "\u00BFQu\u00E9 tan fuerte fue?", color: "#FFC857", options: EXERCISE_INTENSITY_OPTIONS, value: exerciseIntensity, onChange: setExerciseIntensity }),
+                    React.createElement(ChoiceField, { icon: Brain, label: "\u00BFC\u00F3mo te sentiste de estr\u00E9s?", color: "#C792FF", options: STRESS_LEVEL_OPTIONS, value: stressLevel, onChange: setStressLevel })),
                 React.createElement("button", { onClick: saveToday, disabled: saving, className: "mt-5 w-full sm:w-auto flex items-center justify-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-6 py-2.5 hover:brightness-110 transition disabled:opacity-50" },
                     saving ? React.createElement(Loader2, { size: 16, className: "animate-spin" }) : saved ? React.createElement(Check, { size: 16 }) : React.createElement(ChevronRight, { size: 16 }),
                     saved ? "Guardado" : "Guardar registro de hoy")),
