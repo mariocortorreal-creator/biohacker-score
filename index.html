@@ -3163,6 +3163,52 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         { key: "metas", label: "Metas" },
         ...(isAdmin ? [{ key: "admin", label: "Admin" }] : []),
     ];
+    // ---------- First minute: a diagnosis before any daily entry ----------
+    const diagnosis = useMemo(() => startingPointDiagnosis({
+        weightKg: bodyWeightKg != null ? Number(bodyWeightKg) : null,
+        heightCm: dietProfileDraft.height_cm != null && dietProfileDraft.height_cm !== "" ? Number(dietProfileDraft.height_cm) : null,
+        age: dietProfileDraft.age != null && dietProfileDraft.age !== "" ? Number(dietProfileDraft.age) : null,
+        gender: bodyGender || null,
+        currentStage: bodyCurrentStage || null,
+        targetStage: bodyTargetStage || null,
+        activityLevel: dietProfileDraft.activity_level || null,
+    }), [bodyWeightKg, dietProfileDraft, bodyGender, bodyCurrentStage, bodyTargetStage]);
+    const MISSING_LABELS = {
+        weightKg: "tu peso", heightCm: "tu altura", age: "tu edad", gender: "tu sexo",
+        currentStage: "tu composición actual", targetStage: "tu composición objetivo", activityLevel: "tu nivel de actividad",
+    };
+    let startingPointCard = null;
+    if (entries.length === 0 && diagnosis) {
+        const ageDelta = diagnosis.metabolicAge != null ? diagnosis.metabolicAge - diagnosis.chronologicalAge : null;
+        const ageColor = ageDelta == null ? "#3DDCFF" : ageDelta > 0 ? "#FFC857" : ageDelta < 0 ? "#7FE3A3" : "#3DDCFF";
+        const stat = (value, label, color) => React.createElement("div", { className: "text-center" },
+            React.createElement("div", { className: "font-mono text-2xl", style: { color: color || "#F1F5F9" } }, value),
+            React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-400 mt-1" }, label));
+        const body = diagnosis.missing.length > 0
+            ? React.createElement("div", null,
+                React.createElement("p", { className: "text-sm text-slate-300" }, "Con tres datos te doy tu diagnóstico de arranque, sin registrar nada todavía."),
+                React.createElement("p", { className: "text-xs text-slate-400 mt-2" }, "Falta: ", diagnosis.missing.map((k) => MISSING_LABELS[k]).join(", "), "."),
+                React.createElement("button", { type: "button", onClick: () => setActiveTab("nutricion"), className: "mt-4 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-5 py-2 hover:brightness-110 transition" }, "Completar mis datos"))
+            : React.createElement("div", null,
+                React.createElement("div", { className: "grid grid-cols-3 gap-3" },
+                    stat(`${diagnosis.metabolicAge}`, "edad metabólica est.", ageColor),
+                    stat(`${diagnosis.bmr}`, "kcal en reposo"),
+                    stat(`${diagnosis.tdee}`, "kcal al día")),
+                React.createElement("div", { className: "mt-4 pt-4 border-t border-[#1E2535]" },
+                    React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-400" }, "Tu dirección"),
+                    React.createElement("div", { className: "text-sm text-slate-100 font-medium mt-0.5" }, diagnosis.directionLabel),
+                    React.createElement("div", { className: "text-xs text-slate-400 mt-1" }, `Grasa corporal estimada: ~${diagnosis.fatPct} %. `,
+                        ageDelta > 0 ? `Tu cuerpo gasta como uno ${ageDelta} años mayor: hay margen real de mejora.`
+                            : ageDelta < 0 ? `Tu cuerpo gasta como uno ${Math.abs(ageDelta)} años más joven.`
+                                : "Tu gasto en reposo está donde corresponde a tu edad.")),
+                React.createElement("p", { className: "text-[11px] text-slate-500 mt-3" }, "Estimado a partir de tu composición visual. Una báscula de bioimpedancia lo afina."),
+                React.createElement("div", { className: "flex flex-wrap gap-2 mt-4" },
+                    React.createElement("button", { type: "button", onClick: () => setActiveTab("nutricion"), className: "bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-5 py-2 hover:brightness-110 transition" }, "Generar mi plan de comidas"),
+                    React.createElement("button", { type: "button", onClick: () => { const el = document.getElementById("registro-de-hoy"); if (el) el.scrollIntoView({ behavior: "smooth" }); }, className: "border border-[#1E2535] text-slate-300 text-sm rounded-lg px-5 py-2 hover:border-[#3DDCFF]/50 transition" }, "Registrar mi primera noche")));
+        startingPointCard = React.createElement("section", { className: "w-full max-w-md bg-gradient-to-br from-[#11161F] to-[#060809] border border-[#3DDCFF]/30 rounded-2xl p-5 mb-8" },
+            React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-[#3DDCFF] mb-4" }, "Tu punto de partida"),
+            body);
+    }
     const tabNav = React.createElement("nav", { className: "flex gap-1 overflow-x-auto border-b border-[#1E2535] mb-2 sm:justify-center" }, TABS.map((t) => React.createElement("button", { key: t.key, type: "button", onClick: () => setActiveTab(t.key), className: `shrink-0 text-xs sm:text-sm px-4 py-2.5 border-b-2 transition ${activeTab === t.key ? "border-[#3DDCFF] text-[#3DDCFF]" : "border-transparent text-slate-400 hover:text-slate-300"}` }, t.label)));
     return (React.createElement("div", { className: "min-h-screen bg-[#060809] text-slate-100" },
         React.createElement("header", { className: "border-b border-[#1E2535] px-6 py-4 flex items-center justify-between sticky top-0 bg-[#060809]/90 backdrop-blur z-10" },
@@ -3179,6 +3225,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                 React.createElement("button", { onClick: () => setActionError(""), "aria-label": "Cerrar aviso", className: "text-[#FF6B5E]/70 hover:text-[#FF6B5E] transition shrink-0 text-base leading-none" }, "✕")),
             tabNav,
             activeTab === "inicio" && React.createElement("section", { className: "flex flex-col items-center" },
+                startingPointCard,
                 React.createElement(ScoreRing, { categories: categories, total: total }),
                 streak > 0 && (React.createElement("div", { className: "flex items-center gap-1.5 mt-3 text-sm" },
                     React.createElement("span", null, "\uD83D\uDD25"),
@@ -3248,7 +3295,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             activeTab === "metas" && !isPremium && React.createElement("section", null,
                 React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400 mb-4" }, "Tus metas"),
                 premiumTeaser("Metas personalizadas por categor\u00EDa")),
-            activeTab === "inicio" && React.createElement("section", null,
+            activeTab === "inicio" && React.createElement("section", { id: "registro-de-hoy" },
                 React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400 mb-4" }, "Registro de hoy"),
                 isNativeApp && React.createElement("div", { className: "mb-4" },
                     React.createElement("button", { type: "button", onClick: syncFromHealth, disabled: healthSyncing, className: "flex items-center gap-2 text-xs text-[#3DDCFF] border border-[#3DDCFF]/30 rounded-lg px-3 py-2 hover:bg-[#3DDCFF]/10 transition disabled:opacity-50" },
