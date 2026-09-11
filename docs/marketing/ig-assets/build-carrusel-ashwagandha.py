@@ -16,7 +16,7 @@ BOLD = FONT_DIR + r"\arialbd.ttf"
 REG = FONT_DIR + r"\arial.ttf"
 ITAL = FONT_DIR + r"\ariali.ttf"
 
-OUT_DIR = r"C:\Users\PC\Desktop\.claude\biohacker-score\docs\marketing\ig-assets"
+OUT_DIR = r"C:\Users\User\Desktop\proyecto1\biohacker-score\docs\marketing\ig-assets"
 
 
 def f(path, size):

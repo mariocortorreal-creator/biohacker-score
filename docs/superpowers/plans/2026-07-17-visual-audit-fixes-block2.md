@@ -20,7 +20,7 @@
 ### Task 1: "Más elegido" badge on the Pro pricing tier
 
 **Files:**
-- Modify: `C:\Users\PC\Desktop\.claude\biohackerlatino-web\precios\index.html` (local `<style>` block, currently lines 30-81; `renderCard`, currently lines 175-193)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohackerlatino-web\precios\index.html` (local `<style>` block, currently lines 30-81; `renderCard`, currently lines 175-193)
 
 **Interfaces:** None — self-contained.
 
@@ -135,7 +135,7 @@ Open `precios/index.html` in a browser (served, not `file://`, it fetches from S
 ### Task 2: Card hover for non-anchor cards
 
 **Files:**
-- Modify: `C:\Users\PC\Desktop\.claude\biohackerlatino-web\assets\style.css:406-412`
+- Modify: `C:\Users\User\Desktop\proyecto1\biohackerlatino-web\assets\style.css:406-412`
 
 **Interfaces:** None — self-contained. (Task 1's `.price-card.featured:hover` override depends on this task's broadened selector actually applying to `.price-card` — do this task first, or in the same pass, if executing out of order.)
 
@@ -176,7 +176,7 @@ At desktop width (hover-capable pointer), check `suplementos/index.html` and `pr
 ### Task 3: Home page pacing (conservative pass)
 
 **Files:**
-- Modify: `C:\Users\PC\Desktop\.claude\biohackerlatino-web\assets\style.css:96-100`
+- Modify: `C:\Users\User\Desktop\proyecto1\biohackerlatino-web\assets\style.css:96-100`
 
 **Interfaces:** None — self-contained.
 
@@ -213,8 +213,8 @@ Because `.section` is shared, check this doesn't just affect the home page: load
 ### Task 4: "Próximamente" placeholder cards
 
 **Files:**
-- Modify: `C:\Users\PC\Desktop\.claude\biohackerlatino-web\blog\index.html:88-95` (static grid — insert a literal HTML card)
-- Modify: `C:\Users\PC\Desktop\.claude\biohackerlatino-web\suplementos\index.html:132-184` (dynamic grid — insert a constant + append it after the fetched cards)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohackerlatino-web\blog\index.html:88-95` (static grid — insert a literal HTML card)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohackerlatino-web\suplementos\index.html:132-184` (dynamic grid — insert a constant + append it after the fetched cards)
 
 **Interfaces:** Depends on Task 2 being done first (or in the same pass) for the placeholder cards to get the new hover treatment too — not required for correctness, since `pointer-events: none` on the placeholder means hover is inert either way, but do Task 2 first for consistency if executing sequentially.
 
@@ -313,8 +313,8 @@ Load `blog/index.html`: confirm 6 cards total (5 real + 1 dimmed "Próximamente"
 ### Task 5: Lead-magnet value bullets
 
 **Files:**
-- Modify: `C:\Users\PC\Desktop\.claude\biohackerlatino-web\assets\style.css` (append new shared `.lead-benefits` rule)
-- Modify: `C:\Users\PC\Desktop\.claude\biohackerlatino-web\index.html:223-236` (lead-magnet section)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohackerlatino-web\assets\style.css` (append new shared `.lead-benefits` rule)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohackerlatino-web\index.html:223-236` (lead-magnet section)
 
 **Interfaces:** None — self-contained.
 
@@ -411,7 +411,7 @@ Load `index.html`, scroll to the "Descarga gratis el Protocolo de frío" section
 - [ ] **Syntax-check all 5 touched files**
 
 ```bash
-cd "C:\Users\PC\Desktop\.claude\biohackerlatino-web"
+cd "C:\Users\User\Desktop\proyecto1\biohackerlatino-web"
 node -e "
 const fs = require('fs');
 const files = ['index.html','blog/index.html','precios/index.html','suplementos/index.html'];

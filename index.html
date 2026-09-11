@@ -3182,7 +3182,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         const ageDelta = diagnosis.metabolicAge != null ? diagnosis.metabolicAge - diagnosis.chronologicalAge : null;
         const ageColor = ageDelta == null ? "#3DDCFF" : ageDelta > 0 ? "#FFC857" : ageDelta < 0 ? "#7FE3A3" : "#3DDCFF";
         const stat = (value, label, color) => React.createElement("div", { className: "text-center" },
-            React.createElement("div", { className: "font-mono text-2xl", style: { color: color || "#F1F5F9" } }, value),
+            React.createElement("div", { className: "font-mono text-2xl text-slate-100", style: color ? { color } : undefined }, value),
             React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-400 mt-1" }, label));
         const body = diagnosis.missing.length > 0
             ? React.createElement("div", null,

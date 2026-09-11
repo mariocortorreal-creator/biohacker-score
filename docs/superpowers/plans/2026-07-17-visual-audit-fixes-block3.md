@@ -20,7 +20,7 @@
 ### Task 1: Gold accent for the Elite pricing tier
 
 **Files:**
-- Modify: `C:\Users\PC\Desktop\.claude\biohackerlatino-web\precios\index.html` (local `<style>` block, currently lines 30-101; `renderCard`, currently lines 195-213)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohackerlatino-web\precios\index.html` (local `<style>` block, currently lines 30-101; `renderCard`, currently lines 195-213)
 
 **Interfaces:** None — self-contained.
 
@@ -91,8 +91,8 @@ Open `precios/index.html` in a browser (served, not `file://`): confirm the Elit
 ### Task 2: Ring glow-on-complete
 
 **Files:**
-- Modify: `C:\Users\PC\Desktop\.claude\biohackerlatino-web\assets\style.css:866` (add a new keyframe + class near `.ring-wrap`)
-- Modify: `C:\Users\PC\Desktop\.claude\biohackerlatino-web\index.html:446-471` (`ringObserver`, already touched in Block 1)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohackerlatino-web\assets\style.css:866` (add a new keyframe + class near `.ring-wrap`)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohackerlatino-web\index.html:446-471` (`ringObserver`, already touched in Block 1)
 
 **Interfaces:** None — self-contained.
 
@@ -195,7 +195,7 @@ Scroll the home page until the phone-mock score ring animates in: confirm that o
 ### Task 3: Macro-split bars
 
 **Files:**
-- Modify: `C:\Users\PC\Desktop\.claude\biohacker-score\index.html:491-520` (`MacroCalculatorCard`)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohacker-score\index.html:491-520` (`MacroCalculatorCard`)
 - Test: `npm test`
 
 **Interfaces:** None — self-contained.
@@ -254,7 +254,7 @@ Replace with:
 - [ ] **Step 2: Run the test suite**
 
 ```bash
-cd C:\Users\PC\Desktop\.claude\biohacker-score
+cd C:\Users\User\Desktop\proyecto1\biohacker-score
 npm test
 ```
 
@@ -276,9 +276,9 @@ git commit -m "feat: add macro-split bars to the macro calculator card"
 ### Task 4: Mitochondria pulse (Three.js session-restore loading screen)
 
 **Files:**
-- Modify: `C:\Users\PC\Desktop\.claude\biohacker-score\index.html:19` (add the Three.js CDN `<script>` tag)
-- Modify: `C:\Users\PC\Desktop\.claude\biohacker-score\index.html:141` (insert `hasWebGL`, `canMountMitoLoader`, `MitoLoader` after `initAuthParticles`)
-- Modify: `C:\Users\PC\Desktop\.claude\biohacker-score\index.html` (`App`'s `restoring` render branch, currently line ~2123-2124 — line numbers shift after the Task 3 edit above, search by content instead)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohacker-score\index.html:19` (add the Three.js CDN `<script>` tag)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohacker-score\index.html:141` (insert `hasWebGL`, `canMountMitoLoader`, `MitoLoader` after `initAuthParticles`)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohacker-score\index.html` (`App`'s `restoring` render branch, currently line ~2123-2124 — line numbers shift after the Task 3 edit above, search by content instead)
 - Test: `npm test`
 
 **Interfaces:**
@@ -434,7 +434,7 @@ Replace with:
 - [ ] **Step 4: Run the test suite**
 
 ```bash
-cd C:\Users\PC\Desktop\.claude\biohacker-score
+cd C:\Users\User\Desktop\proyecto1\biohacker-score
 npm test
 ```
 

@@ -223,7 +223,7 @@ Typing now proceeds smoothly to the intended value with no snapping/corruption.
 > eslint .
 
 
-C:\Users\PC\Desktop\.claude\biohacker-score\index.html
+C:\Users\User\Desktop\proyecto1\biohacker-score\index.html
     69:7   warning  'COACH_PLAN_LINK' is assigned a value but never used       no-unused-vars
    156:14  warning  'e' is defined but never used                              no-unused-vars
   1119:12  warning  'checkingPlan' is assigned a value but never used          no-unused-vars

@@ -21,8 +21,8 @@
 ### Task 1: Fix stuck 0%/0 counters on mobile
 
 **Files:**
-- Modify: `C:\Users\PC\Desktop\.claude\biohackerlatino-web\index.html:349-367` (`.ev-stat` counters, mobile IntersectionObserver path)
-- Modify: `C:\Users\PC\Desktop\.claude\biohackerlatino-web\index.html:405-418` (score-ring `ringObserver`)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohackerlatino-web\index.html:349-367` (`.ev-stat` counters, mobile IntersectionObserver path)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohackerlatino-web\index.html:405-418` (score-ring `ringObserver`)
 
 **Interfaces:** None — self-contained, no dependency on other tasks.
 
@@ -143,7 +143,7 @@ if (phoneEl) {
 
 - [ ] **Step 3: Manual verification**
 
-Serve the folder locally (`npx serve C:\Users\PC\Desktop\.claude\biohackerlatino-web`, or open `index.html` directly) and, using real Chrome DevTools device emulation at a mobile width (390px) with throttled/fast scrolling, confirm:
+Serve the folder locally (`npx serve C:\Users\User\Desktop\proyecto1\biohackerlatino-web`, or open `index.html` directly) and, using real Chrome DevTools device emulation at a mobile width (390px) with throttled/fast scrolling, confirm:
 - The 4 stat cards ("+250%", "-63%", "-27.9%", "+13.9%") animate to their real values, not stuck at `0%`.
 - The phone-mock score ring animates to `74` with both ring segments drawn.
 - Force-testing the fallback: temporarily set `setTimeout(..., 3000)` to `setTimeout(..., 50)` in a scratch copy, confirm the fallback fires and sets the correct final text, then revert (do not ship the shortened delay).
@@ -157,7 +157,7 @@ This repo has no git/CI. State explicitly to Mario that `index.html` changed loc
 ### Task 2: Add a working mobile nav menu (10 pages)
 
 **Files:**
-- Modify: `C:\Users\PC\Desktop\.claude\biohackerlatino-web\assets\style.css` (shared — one edit covers all 10 pages)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohackerlatino-web\assets\style.css` (shared — one edit covers all 10 pages)
 - Modify (button + script, one insertion each): `index.html`, `blog\index.html`, `blog\ayuno-intermitente-ciencia-real.html`, `blog\cafeina-l-teanina-enfoque-sin-el-bajon.html`, `blog\creatina-no-es-solo-para-el-gimnasio.html`, `blog\exposicion-al-frio-protocolo-real.html`, `blog\magnesio-para-dormir-cual-funciona.html`, `precios\index.html`, `suplementos\index.html`, `privacidad\index.html`
 
 **Interfaces:** None — self-contained. (Depends on nothing from Task 1/3, though Task 3 also edits `index.html` — no line overlap, safe to do in either order.)
@@ -445,8 +445,8 @@ Same as Task 1 — no git/CI on this repo, changes need a manual Netlify redeplo
 ### Task 3: Sticky mobile CTA bar (home page only)
 
 **Files:**
-- Modify: `C:\Users\PC\Desktop\.claude\biohackerlatino-web\assets\style.css` (append new rule block — does not touch Task 2's edited lines, safe to do in either order relative to Task 2)
-- Modify: `C:\Users\PC\Desktop\.claude\biohackerlatino-web\index.html` (add markup before the footer's closing `<script>` tags, add JS in the existing trailing `<script>` block)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohackerlatino-web\assets\style.css` (append new rule block — does not touch Task 2's edited lines, safe to do in either order relative to Task 2)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohackerlatino-web\index.html` (add markup before the footer's closing `<script>` tags, add JS in the existing trailing `<script>` block)
 
 **Interfaces:** None — self-contained.
 
@@ -547,10 +547,10 @@ Same as Tasks 1-2.
 ### Task 4: App auth-screen visual parity + app-wide background unification
 
 **Files:**
-- Modify: `C:\Users\PC\Desktop\.claude\biohacker-score\index.html:54` (add `useRef` to the existing destructure)
-- Modify: `C:\Users\PC\Desktop\.claude\biohacker-score\index.html` (insert new `initAuthParticles` helper after the config-constants block, currently ending at line 83)
-- Modify: `C:\Users\PC\Desktop\.claude\biohacker-score\index.html` (`AuthScreen`, currently starting at line 594)
-- Modify: `C:\Users\PC\Desktop\.claude\biohacker-score\index.html` (global hex swap `#0A0E14` → `#060809`, all occurrences)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohacker-score\index.html:54` (add `useRef` to the existing destructure)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohacker-score\index.html` (insert new `initAuthParticles` helper after the config-constants block, currently ending at line 83)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohacker-score\index.html` (`AuthScreen`, currently starting at line 594)
+- Modify: `C:\Users\User\Desktop\proyecto1\biohacker-score\index.html` (global hex swap `#0A0E14` → `#060809`, all occurrences)
 - Test: `npm test` (existing suite, no new test files — the syntax-check test already covers this)
 
 **Interfaces:** None — self-contained within this one file.
@@ -701,7 +701,7 @@ Using a find-and-replace-all pass over `index.html` (not scoped to one function 
 - [ ] **Step 5: Run the test suite**
 
 ```bash
-cd C:\Users\PC\Desktop\.claude\biohacker-score
+cd C:\Users\User\Desktop\proyecto1\biohacker-score
 npm test
 ```
 
@@ -709,7 +709,7 @@ Expected: all 50 existing tests pass, in particular `every inline <script> block
 
 - [ ] **Step 6: Manual verification in a browser**
 
-Serve the app (e.g. `npx serve C:\Users\PC\Desktop\.claude\biohacker-score`) and open it logged out: confirm the login/signup screen now shows drifting particles + the radial gradient instead of a flat black screen, confirm the background reads as the same near-black as `biohackerlatino-web` (`#060809`) rather than the old `#0A0E14`. Log in, and spot-check the Dashboard and (if you have coach access) the coach panel still render correctly with the new background — nothing should look visually broken, since `#060809` and `#0A0E14` are very close in value.
+Serve the app (e.g. `npx serve C:\Users\User\Desktop\proyecto1\biohacker-score`) and open it logged out: confirm the login/signup screen now shows drifting particles + the radial gradient instead of a flat black screen, confirm the background reads as the same near-black as `biohackerlatino-web` (`#060809`) rather than the old `#0A0E14`. Log in, and spot-check the Dashboard and (if you have coach access) the coach panel still render correctly with the new background — nothing should look visually broken, since `#060809` and `#0A0E14` are very close in value.
 
 - [ ] **Step 7: Commit**
 
@@ -723,8 +723,8 @@ git commit -m "feat: add ambient particles to auth screen, unify app background 
 ### Task 5: "Ver el análisis" video link on supplement cards
 
 **Files:**
-- Create: `C:\Users\PC\Desktop\.claude\biohacker-score\supabase\migrations\20260717120000_add_supplement_video_url_column.sql`
-- Modify: `C:\Users\PC\Desktop\.claude\biohackerlatino-web\suplementos\index.html:132-155` (`renderCard`)
+- Create: `C:\Users\User\Desktop\proyecto1\biohacker-score\supabase\migrations\20260717120000_add_supplement_video_url_column.sql`
+- Modify: `C:\Users\User\Desktop\proyecto1\biohackerlatino-web\suplementos\index.html:132-155` (`renderCard`)
 
 **Interfaces:**
 - Produces: a nullable `video_url text` column on `public.supplement_recommendations`, read the same way `amazon_affiliate_url` already is (`s.video_url` on each row returned by the existing `GET {REST}/supplement_recommendations?select=*` call — no query change needed, `select=*` already includes new columns).
