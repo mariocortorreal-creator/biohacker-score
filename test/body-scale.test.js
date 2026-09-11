@@ -8,6 +8,7 @@ const {
   goalDirectionFromBody,
   migrateBodyStageV1ToV2,
   GOAL_DIRECTION_LABELS,
+  adaptiveNoteApplies,
 } = loadBodyScale();
 
 // Stage numbers, for readability in the assertions below.
@@ -126,4 +127,13 @@ test("no old stage migrates onto obesity, which the old scale never depicted", (
   // stored profile would be fabricating data the user never entered.
   const migrated = [1, 2, 3, 4].map(migrateBodyStageV1ToV2);
   assert.ok(!migrated.includes(OBESIDAD), `unexpected obesity mapping: ${migrated}`);
+});
+
+test("adaptiveNoteApplies fires for recomp when the day had little or no exercise", () => {
+  assert.equal(adaptiveNoteApplies("recomp", { exerciseMinutes: null }), true);
+  assert.equal(adaptiveNoteApplies("recomp", { exerciseMinutes: 10 }), true);
+});
+
+test("adaptiveNoteApplies stays quiet for recomp on a trained day", () => {
+  assert.equal(adaptiveNoteApplies("recomp", { exerciseMinutes: 45 }), false);
 });

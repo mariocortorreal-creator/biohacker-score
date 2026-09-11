@@ -818,7 +818,7 @@ const CATEGORY_TO_SUPPLEMENT_GOAL = { sleep: "sleep", nutrition: "fasting_metabo
 function adaptiveNoteApplies(goalDirection, today) {
     if (goalDirection === "cut")
         return today.stressLevel != null && today.stressLevel >= 8;
-    if (goalDirection === "bulk")
+    if (goalDirection === "bulk" || goalDirection === "recomp")
         return today.exerciseMinutes == null || today.exerciseMinutes < 20;
     if (goalDirection === "maintain")
         return today.sleepHours != null && today.goalSleepHours != null && today.sleepHours < today.goalSleepHours;
@@ -1637,7 +1637,7 @@ function BodySelector({ draft, setDraft, onSave, saving, savedGender, savedCurre
     const list = BODY_STAGES[draft.gender] || BODY_STAGES.male;
     const savedCurrentStage = savedGender ? bodyStage(savedGender, savedCurrent) : null;
     const savedTargetStage = savedGender ? bodyStage(savedGender, savedTarget) : null;
-    return (React.createElement("section", null,
+    return (React.createElement("section", { id: "composicion-corporal" },
         React.createElement("div", { className: "flex items-center justify-between mb-4" },
             React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400" }, "Tu composici\u00F3n corporal"),
             !editing && savedGender && (React.createElement("button", { onClick: () => setEditing(true), className: "text-xs text-[#3DDCFF] hover:brightness-110 transition" }, "Editar"))),
@@ -2032,6 +2032,18 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     const [loadingPremiumContent, setLoadingPremiumContent] = useState(false);
     const [dietProfileDraft, setDietProfileDraft] = useState({ age: "", height_cm: "", activity_level: "", nutrition_goal: "" });
     const [savingDietProfile, setSavingDietProfile] = useState(false);
+    // "Tu punto de partida" inline form: the four diagnosis inputs a free user can't reach otherwise.
+    const [startDraft, setStartDraft] = useState({ age: "", height_cm: "", activity_level: "", weight_kg: "" });
+    const [savingStart, setSavingStart] = useState(false);
+    const [startError, setStartError] = useState("");
+    useEffect(() => {
+        setStartDraft({
+            age: dietProfileDraft.age || "",
+            height_cm: dietProfileDraft.height_cm || "",
+            activity_level: dietProfileDraft.activity_level || "",
+            weight_kg: bodyWeightKg != null ? String(bodyWeightKg) : "",
+        });
+    }, [dietProfileDraft.age, dietProfileDraft.height_cm, dietProfileDraft.activity_level, bodyWeightKg]);
     const [foodExclusions, setFoodExclusions] = useState([]);
     const [loadingExclusions, setLoadingExclusions] = useState(false);
     const [newExclusionName, setNewExclusionName] = useState("");
@@ -2108,6 +2120,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     const [actionError, setActionError] = useState("");
     const [reminderTime, setReminderTime] = useState(() => { try { return localStorage.getItem(REMINDER_TIME_KEY) || ""; } catch (_e) { return ""; } });
     const [reminderStatus, setReminderStatus] = useState("");
+    const reminderCommittedRef = useRef(null);
     const authHeaders = { apikey: ANON_KEY, Authorization: `Bearer ${session.accessToken}`, "Content-Type": "application/json" };
     useEffect(() => { loadEntries(); loadPlan(); checkCoachStatus(); checkHasActiveCoach(); checkAdminStatus(); loadMyRoutineAssignments(); loadExerciseLibrary(); loadSupplements(); loadSubscriptionPlans(); }, []);
     useEffect(() => {
@@ -2452,7 +2465,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             if (res.status === 401) { onLogout(); return; }
             const data = await res.json();
             if (Array.isArray(data) && data[0]) {
-                if (data[0].reminder_time && !reminderTime) setReminderTime(clockFromDb(data[0].reminder_time));
+                if (data[0].reminder_time && !reminderTime) { const hydrated = clockFromDb(data[0].reminder_time); reminderCommittedRef.current = hydrated; setReminderTime(hydrated); }
                 setPremiumSource(data[0].premium_source || null);
                 setTrialEndsAt(data[0].trial_ends_at || null);
                 setSubscriptionTier(data[0].subscription_tier || null);
@@ -2806,13 +2819,15 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             setSavingBody(false);
         }
     }
-    async function saveWeight() {
-        if (!weightDraft)
+    async function saveWeight(kgOverride) {
+        // MacroCalculatorCard passes the click event here; only a real number overrides the draft.
+        const kg = typeof kgOverride === "number" && Number.isFinite(kgOverride) ? kgOverride : weightDraft;
+        if (!kg)
             return;
         setSavingWeight(true);
         setActionError("");
         try {
-            const clampedWeight = Math.min(400, Math.max(20, weightDraft));
+            const clampedWeight = Math.min(400, Math.max(20, kg));
             const res = await fetch(`${REST}/profiles?id=eq.${session.user.id}`, {
                 method: "PATCH",
                 headers: { ...authHeaders, Prefer: "return=minimal" },
@@ -2821,6 +2836,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             if (!res.ok)
                 throw new Error("No se pudo guardar el peso.");
             setBodyWeightKg(clampedWeight);
+            setWeightDraft(clampedWeight);
         }
         catch (e) {
             console.error(e);
@@ -2996,7 +3012,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         await cancelDailyReminder();
         const body = currentStreak >= 2
             ? `Llevas ${currentStreak} días seguidos. Dos toques y sigues.`
-            : "¿A qué hora te acostaste anoche? Con eso ya tienes tu score de hoy.";
+            : "¿A qué hora te acostaste anoche y cómo dormiste? Dos toques y tienes tu score.";
         await nativeNotifications.schedule({ notifications: [{
             id: REMINDER_NOTIFICATION_ID,
             title: "Biohacker Score",
@@ -3005,9 +3021,8 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         }] });
         return true;
     }
-    async function saveReminderTime(hhmm) {
-        setReminderTime(hhmm);
-        try { if (hhmm) localStorage.setItem(REMINDER_TIME_KEY, hhmm); else localStorage.removeItem(REMINDER_TIME_KEY); } catch (_e) { /* storage unavailable */ }
+    async function commitReminderTime(hhmm) {
+        reminderCommittedRef.current = hhmm;
         try {
             await fetch(`${REST}/profiles?id=eq.${session.user.id}`, { method: "PATCH", headers: { ...authHeaders, "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify({ reminder_time: hhmm || null }) });
         } catch (_e) { /* preference still lives in localStorage */ }
@@ -3015,13 +3030,36 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         const ok = await scheduleDailyReminder(hhmm, streak);
         setReminderStatus(ok ? `Te aviso todos los días a las ${hhmm}.` : nativeNotifications ? "No se pudo activar: revisa el permiso de notificaciones." : "Guardado. Los avisos llegan en la app del teléfono.");
     }
+    // The time input fires change on every digit; only the draft moves until blur (or a clear) commits it.
+    function saveReminderTime(hhmm) {
+        setReminderTime(hhmm);
+        try { if (hhmm) localStorage.setItem(REMINDER_TIME_KEY, hhmm); else localStorage.removeItem(REMINDER_TIME_KEY); } catch (_e) { /* storage unavailable */ }
+        if (hhmm === "") commitReminderTime("");
+    }
+    function commitReminderDraft() {
+        if (reminderTime && reminderTime !== reminderCommittedRef.current) commitReminderTime(reminderTime);
+    }
     const reminderSection = React.createElement("section", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
         React.createElement("div", { className: "flex items-center justify-between gap-3" },
             React.createElement("div", null,
                 React.createElement("div", { className: "text-sm text-slate-200" }, "Recordatorio diario"),
                 React.createElement("div", { className: "text-[11px] text-slate-400 mt-0.5" }, "Un aviso a la hora que elijas para registrar tu noche.")),
-            React.createElement("input", { type: "time", value: reminderTime, onChange: (e) => saveReminderTime(e.target.value), "aria-label": "Hora del recordatorio diario", className: "bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
+            React.createElement("input", { type: "time", value: reminderTime, onChange: (e) => saveReminderTime(e.target.value), onBlur: commitReminderDraft, "aria-label": "Hora del recordatorio diario", className: "bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
         reminderStatus && React.createElement("div", { className: "text-[11px] mt-2", style: { color: "#7FE3A3" } }, reminderStatus));
+    useEffect(() => {
+        // The OS drops pending local notifications on reinstall/update; put the saved reminder back
+        // if it is missing. checkPermissions only: never prompt on mount.
+        if (!nativeNotifications || clockToMinutes(reminderTime) == null) return;
+        (async () => {
+            try {
+                const perm = await nativeNotifications.checkPermissions();
+                if (!perm || perm.display !== "granted") return;
+                const pending = await nativeNotifications.getPending();
+                const already = (pending.notifications || []).some((n) => n.id === REMINDER_NOTIFICATION_ID);
+                if (!already) await scheduleDailyReminder(reminderTime, streak);
+            } catch (_e) { /* native scheduling unavailable */ }
+        })();
+    }, [reminderTime, nativeNotifications]);
     useEffect(() => {
         // Ask for a store rating at a genuine moment of satisfaction (a 3-day streak), not on
         // first load. The OS-level API (SKStoreReviewController / Android ReviewManager) already
@@ -3123,6 +3161,10 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             .map((p) => React.createElement("a", { key: p.tier, href: `${CLIENT_PLAN_LINKS[p.tier]}?client_reference_id=${session.user.id}`, target: "_blank", rel: "noopener noreferrer", className: cls }, `${p.display_name} · $${Number(p.price_usd).toFixed(2)}/mes`));
     }
     function premiumTeaser(label) {
+        // Floor price comes from the same subscription_plans rows the buttons below render, never a literal.
+        const pricedPlans = subscriptionPlans.map((p) => Number(p.price_usd)).filter((n) => Number.isFinite(n) && n > 0);
+        const floor = pricedPlans.length > 0 ? Math.min(...pricedPlans).toFixed(2) : null;
+        const teaserCopy = `Planes de comida generados para ti, escáner de comida por foto y protocolos.${floor ? ` Desde $${floor}/mes.` : ""}`;
         return React.createElement("div", { className: "relative bg-[#11161F] border border-[#1E2535] rounded-2xl p-6 overflow-hidden" },
             React.createElement("div", { className: "space-y-3 blur-sm select-none pointer-events-none" },
                 React.createElement("div", { className: "h-4 w-2/3 bg-[#1E2535] rounded" }),
@@ -3130,7 +3172,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                 React.createElement("div", { className: "h-3 w-5/6 bg-[#1E2535] rounded" })),
             React.createElement("div", { className: "absolute inset-0 flex flex-col items-center justify-center gap-2 text-center px-4 bg-[#060809]/70" },
                 React.createElement("span", { className: "text-base text-slate-100 font-medium" }, "Esto es Premium"),
-                React.createElement("p", { className: "text-xs text-slate-400 mt-1 max-w-xs" }, "Planes de comida generados para ti, escáner de comida por foto, recetas y protocolos. Desde $9.99/mes."),
+                React.createElement("p", { className: "text-xs text-slate-400 mt-1 max-w-xs" }, teaserCopy),
                 React.createElement("div", { className: "flex flex-wrap items-center justify-center gap-1.5 mt-1" }, tierUpgradeButtons("sm"))));
     }
     function premiumLoading() {
@@ -3322,11 +3364,75 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
         const stat = (value, label, color) => React.createElement("div", { className: "text-center" },
             React.createElement("div", { className: "font-mono text-2xl text-slate-100", style: color ? { color } : undefined }, value),
             React.createElement("div", { className: "text-[10px] uppercase tracking-wider text-slate-400 mt-1" }, label));
+        const START_FIELD_LIMITS = { age: [14, 100], height_cm: [120, 230], weight_kg: [30, 300] };
+        const START_FIELD_NAMES = { age: "edad", height_cm: "altura", weight_kg: "peso" };
+        const START_MISSING_KEY = { age: "age", height_cm: "heightCm", weight_kg: "weightKg" };
+        const startInputClass = "w-full bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]";
+        const startLabelClass = "block text-[10px] uppercase tracking-wider text-slate-400 mb-1";
+        const needsField = (k) => diagnosis.missing.includes(k);
+        const needsBody = needsField("gender") || needsField("currentStage") || needsField("targetStage");
+        const numberField = (key, label, unit) => React.createElement("label", { className: "block" },
+            React.createElement("span", { className: startLabelClass }, `${label} (${unit})`),
+            React.createElement("input", { type: "number", inputMode: "decimal", min: START_FIELD_LIMITS[key][0], max: START_FIELD_LIMITS[key][1], value: startDraft[key], onChange: (e) => setStartDraft({ ...startDraft, [key]: e.target.value }), className: startInputClass }));
+        const activityField = React.createElement("label", { className: "block" },
+            React.createElement("span", { className: startLabelClass }, "Nivel de actividad"),
+            React.createElement("select", { value: startDraft.activity_level, onChange: (e) => setStartDraft({ ...startDraft, activity_level: e.target.value }), className: startInputClass },
+                React.createElement("option", { value: "" }, "Elige uno"),
+                Object.keys(ACTIVITY_LEVEL_LABELS).map((k) => React.createElement("option", { key: k, value: k }, ACTIVITY_LEVEL_LABELS[k]))));
+        const saveStartingPoint = async () => {
+            setStartError("");
+            const patch = {};
+            const numeric = {};
+            for (const key of ["age", "height_cm", "weight_kg"]) {
+                if (!needsField(START_MISSING_KEY[key]))
+                    continue;
+                const [lo, hi] = START_FIELD_LIMITS[key];
+                const n = key === "age" ? parseInt(startDraft[key], 10) : parseFloat(startDraft[key]);
+                if (!Number.isFinite(n) || n < lo || n > hi) {
+                    setStartError(`Revisa tu ${START_FIELD_NAMES[key]}: entre ${lo} y ${hi}.`);
+                    return;
+                }
+                numeric[key] = n;
+            }
+            if (needsField("age"))
+                patch.age = numeric.age;
+            if (needsField("heightCm"))
+                patch.height_cm = numeric.height_cm;
+            if (needsField("activityLevel")) {
+                if (!ACTIVITY_FACTORS[startDraft.activity_level]) {
+                    setStartError("Elige tu nivel de actividad.");
+                    return;
+                }
+                patch.activity_level = startDraft.activity_level;
+            }
+            setSavingStart(true);
+            try {
+                if (Object.keys(patch).length > 0)
+                    await saveDietProfile(patch);
+                if (needsField("weightKg"))
+                    await saveWeight(numeric.weight_kg);
+            }
+            finally {
+                setSavingStart(false);
+            }
+        };
+        const startFormFields = [
+            needsField("age") && numberField("age", "Edad", "años"),
+            needsField("heightCm") && numberField("height_cm", "Altura", "cm"),
+            needsField("weightKg") && numberField("weight_kg", "Peso", "kg"),
+            needsField("activityLevel") && activityField,
+        ].filter(Boolean);
+        const startForm = React.createElement("div", { className: "mt-4 space-y-3" },
+            startFormFields.length > 0 && React.createElement("div", { className: "grid grid-cols-2 gap-3" }, ...startFormFields),
+            needsBody && React.createElement("button", { type: "button", onClick: () => { const el = document.getElementById("composicion-corporal"); if (el) el.scrollIntoView({ behavior: "smooth" }); }, className: "text-xs text-[#3DDCFF] hover:brightness-110 transition" }, "Elegir mi sexo y composición corporal ↓"),
+            startError && React.createElement("p", { className: "text-xs text-[#FF6B5E]" }, startError),
+            startFormFields.length > 0 && React.createElement("button", { type: "button", onClick: saveStartingPoint, disabled: savingStart, className: "flex items-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-5 py-2 hover:brightness-110 transition disabled:opacity-40" },
+                savingStart ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : null, "Guardar y ver mi diagnóstico"));
         const body = diagnosis.missing.length > 0
             ? React.createElement("div", null,
                 React.createElement("p", { className: "text-sm text-slate-300" }, "Con tres datos te doy tu diagnóstico de arranque, sin registrar nada todavía."),
                 React.createElement("p", { className: "text-xs text-slate-400 mt-2" }, "Falta: ", diagnosis.missing.map((k) => MISSING_LABELS[k]).join(", "), "."),
-                React.createElement("button", { type: "button", onClick: () => setActiveTab("nutricion"), className: "mt-4 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-5 py-2 hover:brightness-110 transition" }, "Completar mis datos"))
+                startForm)
             : React.createElement("div", null,
                 React.createElement("div", { className: "grid grid-cols-3 gap-3" },
                     stat(`${diagnosis.metabolicAge}`, "edad metabólica est.", ageColor),
@@ -3358,6 +3464,13 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             hint: "Pon las dos horas y calculo lo que dormiste.",
         }),
         React.createElement(ChoiceField, { icon: Moon, label: "¿Cómo dormiste?", color: "#3DDCFF", options: SLEEP_QUALITY_OPTIONS, value: sleepQuality, onChange: setSleepQuality }));
+    // Nothing to score means nothing to save: the quick form needs a full night, the full form at least one category.
+    const canSaveToday = showFullEntry
+        ? (sleepScore(sleepHours, sleepQuality, goals.sleepHours) != null
+            || nutritionScore(fastingHours, nutritionQuality, goals.fastingHours) != null
+            || exerciseScore(exerciseMinutes, exerciseIntensity, goals.exerciseMinutes) != null
+            || stressScore(stressLevel, goals.stressMax) != null)
+        : (sleepHours != null && sleepQuality != null);
     const fullFields = showFullEntry && React.createElement("div", { className: "space-y-3 mt-3" },
         React.createElement(ClockPairField, {
             icon: Flame, label: "Ayuno", color: "#7FE3A3",
@@ -3490,7 +3603,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                 quickFields,
                 fullToggle,
                 fullFields,
-                React.createElement("button", { onClick: saveToday, disabled: saving, className: "mt-5 w-full sm:w-auto flex items-center justify-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-6 py-2.5 hover:brightness-110 transition disabled:opacity-50" },
+                React.createElement("button", { onClick: saveToday, disabled: saving || !canSaveToday, className: "mt-5 w-full sm:w-auto flex items-center justify-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-6 py-2.5 hover:brightness-110 transition disabled:opacity-50" },
                     saving ? React.createElement(Loader2, { size: 16, className: "animate-spin" }) : saved ? React.createElement(Check, { size: 16 }) : React.createElement(ChevronRight, { size: 16 }),
                     saved ? "Guardado" : (sleepHours != null && !showFullEntry ? "Guardar mi noche" : "Guardar el d\u00EDa")),
                 React.createElement("div", { className: "mt-4" }, reminderSection)),

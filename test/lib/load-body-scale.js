@@ -23,6 +23,7 @@ const EXPORT_NAMES = [
   "ACTIVITY_FACTORS",
   "tdeeFromBmr",
   "startingPointDiagnosis",
+  "adaptiveNoteApplies",
 ];
 
 function loadBodyScale() {
