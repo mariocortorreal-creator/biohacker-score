@@ -1920,6 +1920,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     const [exerciseMinutes, setExerciseMinutes] = useState(null);
     const [exerciseIntensity, setExerciseIntensity] = useState(null);
     const [stressLevel, setStressLevel] = useState(null);
+    const [showFullEntry, setShowFullEntry] = useState(false);
     // Derived from the clock fields, falling back to whatever an older entry already stored.
     const derivedSleepHours = sleepHoursFromClock(bedtime, waketime);
     const sleepHours = derivedSleepHours != null ? derivedSleepHours : storedSleepHours;
@@ -2790,6 +2791,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                     setLastMealTime(clockFromDb(todayEntry.fast_last_meal));
                     setFirstMealTime(clockFromDb(todayEntry.fast_first_meal));
                     setNutritionChecks(todayEntry.nutrition_checks || null);
+                    setShowFullEntry(todayEntry.fasting_hours != null || todayEntry.exercise_minutes != null || todayEntry.stress_level != null || todayEntry.nutrition_quality != null);
                 }
             }
         }
@@ -3210,6 +3212,34 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             body);
     }
     const tabNav = React.createElement("nav", { className: "flex gap-1 overflow-x-auto border-b border-[#1E2535] mb-2 sm:justify-center" }, TABS.map((t) => React.createElement("button", { key: t.key, type: "button", onClick: () => setActiveTab(t.key), className: `shrink-0 text-xs sm:text-sm px-4 py-2.5 border-b-2 transition ${activeTab === t.key ? "border-[#3DDCFF] text-[#3DDCFF]" : "border-transparent text-slate-400 hover:text-slate-300"}` }, t.label)));
+    const quickFields = React.createElement("div", { className: "space-y-3" },
+        React.createElement(ClockPairField, {
+            icon: Moon, label: "Sueño", color: "#3DDCFF",
+            startLabel: "Me acosté a las", endLabel: "Me levanté a las",
+            startValue: bedtime, endValue: waketime,
+            onStartChange: setBedtime, onEndChange: setWaketime,
+            derived: sleepHours, derivedUnit: "h",
+            hint: "Pon las dos horas y calculo lo que dormiste.",
+        }),
+        React.createElement(ChoiceField, { icon: Moon, label: "¿Cómo dormiste?", color: "#3DDCFF", options: SLEEP_QUALITY_OPTIONS, value: sleepQuality, onChange: setSleepQuality }));
+    const fullFields = showFullEntry && React.createElement("div", { className: "space-y-3 mt-3" },
+        React.createElement(ClockPairField, {
+            icon: Flame, label: "Ayuno", color: "#7FE3A3",
+            startLabel: "Última comida de ayer", endLabel: "Primera comida de hoy",
+            startValue: lastMealTime, endValue: firstMealTime,
+            onStartChange: setLastMealTime, onEndChange: setFirstMealTime,
+            derived: fastingHours, derivedUnit: "h",
+            hint: "Con las dos horas calculo tu ventana de ayuno.",
+        }),
+        React.createElement(ChecklistField, { icon: Flame, label: "¿Qué comiste hoy?", color: "#7FE3A3", items: NUTRITION_CHECKLIST, checks: nutritionChecks || {}, onToggle: toggleNutritionCheck, derived: nutritionQuality }),
+        React.createElement(MinutesField, { icon: Activity, label: "Ejercicio", color: "#FFC857", value: exerciseMinutes, onChange: setExerciseMinutes }),
+        React.createElement(ChoiceField, { icon: Activity, label: "¿Qué tan fuerte fue?", color: "#FFC857", options: EXERCISE_INTENSITY_OPTIONS, value: exerciseIntensity, onChange: setExerciseIntensity }),
+        React.createElement(ChoiceField, { icon: Brain, label: "¿Cómo te sentiste de estrés?", color: "#C792FF", options: STRESS_LEVEL_OPTIONS, value: stressLevel, onChange: setStressLevel }));
+    const fullToggle = React.createElement("button", {
+        type: "button",
+        onClick: () => setShowFullEntry((v) => !v),
+        className: "w-full mt-3 text-xs text-slate-400 hover:text-slate-200 border border-dashed border-[#1E2535] rounded-lg py-2 transition",
+    }, showFullEntry ? "Ocultar el registro completo" : "Registro completo: ayuno, comida, ejercicio y estrés");
     return (React.createElement("div", { className: "min-h-screen bg-[#060809] text-slate-100" },
         React.createElement("header", { className: "border-b border-[#1E2535] px-6 py-4 flex items-center justify-between sticky top-0 bg-[#060809]/90 backdrop-blur z-10" },
             React.createElement("div", { className: "flex items-center gap-2" },
@@ -3302,31 +3332,12 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                         healthSyncing ? React.createElement(Loader2, { size: 14, className: "animate-spin" }) : React.createElement(Activity, { size: 14 }),
                         "Traer minutos de ejercicio de Salud"),
                     healthSyncMessage && React.createElement("div", { className: "text-[11px] text-slate-400 mt-2" }, healthSyncMessage)),
-                React.createElement("div", { className: "grid sm:grid-cols-2 gap-3" },
-                    React.createElement(ClockPairField, {
-                        icon: Moon, label: "Sue\u00F1o", color: "#3DDCFF",
-                        startLabel: "Me acost\u00E9 a las", endLabel: "Me levant\u00E9 a las",
-                        startValue: bedtime, endValue: waketime,
-                        onStartChange: setBedtime, onEndChange: setWaketime,
-                        derived: sleepHours, derivedUnit: "h",
-                        hint: "Pon las dos horas y calculo lo que dormiste.",
-                    }),
-                    React.createElement(ChoiceField, { icon: Moon, label: "\u00BFC\u00F3mo dormiste?", color: "#3DDCFF", options: SLEEP_QUALITY_OPTIONS, value: sleepQuality, onChange: setSleepQuality }),
-                    React.createElement(ClockPairField, {
-                        icon: Flame, label: "Ayuno", color: "#7FE3A3",
-                        startLabel: "\u00DAltima comida de ayer", endLabel: "Primera comida de hoy",
-                        startValue: lastMealTime, endValue: firstMealTime,
-                        onStartChange: setLastMealTime, onEndChange: setFirstMealTime,
-                        derived: fastingHours, derivedUnit: "h",
-                        hint: "Con las dos horas calculo tu ventana de ayuno.",
-                    }),
-                    React.createElement(ChecklistField, { icon: Flame, label: "\u00BFQu\u00E9 comiste hoy?", color: "#7FE3A3", items: NUTRITION_CHECKLIST, checks: nutritionChecks || {}, onToggle: toggleNutritionCheck, derived: nutritionQuality }),
-                    React.createElement(MinutesField, { icon: Activity, label: "Ejercicio", color: "#FFC857", value: exerciseMinutes, onChange: setExerciseMinutes }),
-                    React.createElement(ChoiceField, { icon: Activity, label: "\u00BFQu\u00E9 tan fuerte fue?", color: "#FFC857", options: EXERCISE_INTENSITY_OPTIONS, value: exerciseIntensity, onChange: setExerciseIntensity }),
-                    React.createElement(ChoiceField, { icon: Brain, label: "\u00BFC\u00F3mo te sentiste de estr\u00E9s?", color: "#C792FF", options: STRESS_LEVEL_OPTIONS, value: stressLevel, onChange: setStressLevel })),
+                quickFields,
+                fullToggle,
+                fullFields,
                 React.createElement("button", { onClick: saveToday, disabled: saving, className: "mt-5 w-full sm:w-auto flex items-center justify-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-6 py-2.5 hover:brightness-110 transition disabled:opacity-50" },
                     saving ? React.createElement(Loader2, { size: 16, className: "animate-spin" }) : saved ? React.createElement(Check, { size: 16 }) : React.createElement(ChevronRight, { size: 16 }),
-                    saved ? "Guardado" : "Guardar registro de hoy")),
+                    saved ? "Guardado" : (sleepHours != null && !showFullEntry ? "Guardar mi noche" : "Guardar el d\u00EDa"))),
             activeTab === "entrenamiento" && !isPremium && React.createElement("section", null,
                 React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400 mb-4" }, "Entrenamiento"),
                 premiumTeaser("Rutina asignada y biblioteca de ejercicios")),
