@@ -6,7 +6,9 @@
 import { Health } from 'capacitor-health';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 import { InAppReview } from '@capacitor-community/in-app-review';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 window.CapacitorHealth = Health;
 window.CapacitorPurchases = Purchases;
 window.CapacitorInAppReview = InAppReview;
+window.CapacitorLocalNotifications = LocalNotifications;

@@ -76,6 +76,8 @@ const REVENUECAT_API_KEYS = {
 };
 const SESSION_KEY = "biohacker_score_session";
 const REVIEW_PROMPT_KEY = "biohacker_score_review_prompted";
+const REMINDER_TIME_KEY = "biohacker_score_reminder_time";
+const REMINDER_NOTIFICATION_ID = 4101;
 // window.Capacitor is injected automatically by the native app shell (Android/iOS) at page load;
 // it's simply undefined in a plain browser, which is exactly the signal used to hide native-only UI.
 const isNativeApp = typeof window !== "undefined" && !!window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform();
@@ -2104,6 +2106,8 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     // and no visible sign anything went wrong — a user with a flaky connection would
     // believe a save succeeded when it silently didn't.
     const [actionError, setActionError] = useState("");
+    const [reminderTime, setReminderTime] = useState(() => { try { return localStorage.getItem(REMINDER_TIME_KEY) || ""; } catch (_e) { return ""; } });
+    const [reminderStatus, setReminderStatus] = useState("");
     const authHeaders = { apikey: ANON_KEY, Authorization: `Bearer ${session.accessToken}`, "Content-Type": "application/json" };
     useEffect(() => { loadEntries(); loadPlan(); checkCoachStatus(); checkHasActiveCoach(); checkAdminStatus(); loadMyRoutineAssignments(); loadExerciseLibrary(); loadSupplements(); loadSubscriptionPlans(); }, []);
     useEffect(() => {
@@ -2444,10 +2448,11 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     async function loadPlan() {
         setCheckingPlan(true);
         try {
-            const res = await fetch(`${REST}/profiles?id=eq.${session.user.id}&select=goal_sleep_hours,goal_fasting_hours,goal_exercise_minutes,goal_stress_max,body_gender,body_current_stage,body_target_stage,weight_kg,premium_source,trial_ends_at,age,height_cm,activity_level,nutrition_goal,subscription_tier`, { headers: authHeaders });
+            const res = await fetch(`${REST}/profiles?id=eq.${session.user.id}&select=goal_sleep_hours,goal_fasting_hours,goal_exercise_minutes,goal_stress_max,body_gender,body_current_stage,body_target_stage,weight_kg,premium_source,trial_ends_at,age,height_cm,activity_level,nutrition_goal,subscription_tier,reminder_time`, { headers: authHeaders });
             if (res.status === 401) { onLogout(); return; }
             const data = await res.json();
             if (Array.isArray(data) && data[0]) {
+                if (data[0].reminder_time && !reminderTime) setReminderTime(clockFromDb(data[0].reminder_time));
                 setPremiumSource(data[0].premium_source || null);
                 setTrialEndsAt(data[0].trial_ends_at || null);
                 setSubscriptionTier(data[0].subscription_tier || null);
@@ -2913,6 +2918,7 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
             if (!res.ok)
                 throw new Error("No se pudo guardar.");
             await loadEntries();
+            if (reminderTime) scheduleDailyReminder(reminderTime, streak + 1);
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
         }
@@ -2976,6 +2982,46 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
     const insightCard = insight && React.createElement("div", { className: "w-full max-w-md mt-4 bg-[#11161F] border rounded-2xl px-4 py-3 flex items-start gap-3", style: { borderColor: insight.tone === "up" ? "#7FE3A355" : insight.tone === "down" ? "#FFC85755" : "#1E2535" } },
         React.createElement("span", { className: "font-mono text-lg leading-none mt-0.5", style: { color: insight.tone === "up" ? "#7FE3A3" : insight.tone === "down" ? "#FFC857" : "#3DDCFF" } }, insight.tone === "up" ? "↑" : insight.tone === "down" ? "↓" : "→"),
         React.createElement("p", { className: "text-sm text-slate-200 leading-relaxed" }, insight.text));
+    const nativeNotifications = typeof window !== "undefined" && window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() && window.CapacitorLocalNotifications ? window.CapacitorLocalNotifications : null;
+    async function cancelDailyReminder() {
+        if (!nativeNotifications) return;
+        try { await nativeNotifications.cancel({ notifications: [{ id: REMINDER_NOTIFICATION_ID }] }); } catch (_e) { /* nothing scheduled */ }
+    }
+    async function scheduleDailyReminder(hhmm, currentStreak) {
+        if (!nativeNotifications) return false;
+        const minutes = clockToMinutes(hhmm);
+        if (minutes == null) return false;
+        const perm = await nativeNotifications.requestPermissions();
+        if (!perm || perm.display !== "granted") return false;
+        await cancelDailyReminder();
+        const body = currentStreak >= 2
+            ? `Llevas ${currentStreak} días seguidos. Dos toques y sigues.`
+            : "¿A qué hora te acostaste anoche? Con eso ya tienes tu score de hoy.";
+        await nativeNotifications.schedule({ notifications: [{
+            id: REMINDER_NOTIFICATION_ID,
+            title: "Biohacker Score",
+            body,
+            schedule: { on: { hour: Math.floor(minutes / 60), minute: minutes % 60 }, allowWhileIdle: true },
+        }] });
+        return true;
+    }
+    async function saveReminderTime(hhmm) {
+        setReminderTime(hhmm);
+        try { if (hhmm) localStorage.setItem(REMINDER_TIME_KEY, hhmm); else localStorage.removeItem(REMINDER_TIME_KEY); } catch (_e) { /* storage unavailable */ }
+        try {
+            await fetch(`${REST}/profiles?id=eq.${session.user.id}`, { method: "PATCH", headers: { ...authHeaders, "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify({ reminder_time: hhmm || null }) });
+        } catch (_e) { /* preference still lives in localStorage */ }
+        if (!hhmm) { await cancelDailyReminder(); setReminderStatus("Recordatorio desactivado."); return; }
+        const ok = await scheduleDailyReminder(hhmm, streak);
+        setReminderStatus(ok ? `Te aviso todos los días a las ${hhmm}.` : nativeNotifications ? "No se pudo activar: revisa el permiso de notificaciones." : "Guardado. Los avisos llegan en la app del teléfono.");
+    }
+    const reminderSection = React.createElement("section", { className: "bg-[#11161F] border border-[#1E2535] rounded-2xl p-4" },
+        React.createElement("div", { className: "flex items-center justify-between gap-3" },
+            React.createElement("div", null,
+                React.createElement("div", { className: "text-sm text-slate-200" }, "Recordatorio diario"),
+                React.createElement("div", { className: "text-[11px] text-slate-400 mt-0.5" }, "Un aviso a la hora que elijas para registrar tu noche.")),
+            React.createElement("input", { type: "time", value: reminderTime, onChange: (e) => saveReminderTime(e.target.value), "aria-label": "Hora del recordatorio diario", className: "bg-[#060809] border border-[#1E2535] rounded-lg px-3 py-2 text-slate-100 text-sm outline-none focus:border-[#3DDCFF]" })),
+        reminderStatus && React.createElement("div", { className: "text-[11px] mt-2", style: { color: "#7FE3A3" } }, reminderStatus));
     useEffect(() => {
         // Ask for a store rating at a genuine moment of satisfaction (a 3-day streak), not on
         // first load. The OS-level API (SKStoreReviewController / Android ReviewManager) already
@@ -3428,7 +3474,8 @@ function Dashboard({ session, onLogout, onRefreshSession }) {
                 fullFields,
                 React.createElement("button", { onClick: saveToday, disabled: saving, className: "mt-5 w-full sm:w-auto flex items-center justify-center gap-2 bg-[#3DDCFF] text-[#06121A] font-medium text-sm rounded-lg px-6 py-2.5 hover:brightness-110 transition disabled:opacity-50" },
                     saving ? React.createElement(Loader2, { size: 16, className: "animate-spin" }) : saved ? React.createElement(Check, { size: 16 }) : React.createElement(ChevronRight, { size: 16 }),
-                    saved ? "Guardado" : (sleepHours != null && !showFullEntry ? "Guardar mi noche" : "Guardar el d\u00EDa"))),
+                    saved ? "Guardado" : (sleepHours != null && !showFullEntry ? "Guardar mi noche" : "Guardar el d\u00EDa")),
+                React.createElement("div", { className: "mt-4" }, reminderSection)),
             activeTab === "entrenamiento" && !isPremium && React.createElement("section", null,
                 React.createElement("h2", { className: "text-xs uppercase tracking-[0.2em] text-slate-400 mb-4" }, "Entrenamiento"),
                 premiumTeaser("Rutina asignada y biblioteca de ejercicios")),

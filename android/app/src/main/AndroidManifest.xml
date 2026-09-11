@@ -51,6 +51,8 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <!-- capacitor-health: Health Connect app + read scopes actually requested in-app
          (steps, workouts, active calories — see HEALTH_PERMISSIONS in index.html) -->
